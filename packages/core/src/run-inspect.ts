@@ -820,7 +820,7 @@ export const runInspect = async (input: InspectInput): Promise<JsonReport> => {
 
   // Apply config rules overrides after all diagnostics (including deslop/supply-chain) — like svelte-5-doctor --config
   for (const d of allDiagnostics) {
-    const override = configRules[d.ruleId] ?? configRules[d.ruleId.replace("svelte-5-doctor/", "svelte-doctor/")];
+    const override = configRules[d.ruleId] ?? configRules[d.ruleId.replace("svelte-5-doctor/", "svelte-doctor/")] ?? configRules[d.ruleId.replace("svelte/compiler:", "svelte-5-doctor/").replace("svelte/compiler:", "svelte-doctor/")] ?? (d.ruleId.startsWith("svelte/compiler:") ? configRules[`svelte-5-doctor/${d.ruleId.split(":")[1]?.replaceAll("_", "-")}`] : undefined);
     if (override === "off") (d as unknown as { severity: string }).severity = "off";
     else if (override === "warn") d.severity = "warn";
     else if (override === "error") d.severity = "error";

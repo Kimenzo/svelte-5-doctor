@@ -42,6 +42,8 @@ const runRulesOnFile = (filePath: string, source: string): Diagnostic[] => {
   const isRunesFile = /\$state|\$derived|\$effect|\$props|\$bindable|\$inspect/.test(source);
   const lines = source.split("\n");
 
+  const sourceNoComments = source.replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
+
   const report = (ruleId: string, message: string, idx: number, fix?: string) => {
     const meta = RULE_MAP.get(ruleId);
     if (!meta) return;
@@ -213,8 +215,14 @@ const runRulesOnFile = (filePath: string, source: string): Diagnostic[] => {
         report("svelte-5-doctor/legacy-export-let", "`export let` is invalid in runes mode — use `let { prop } = $props()`", m.index ?? 0, "let { prop } = $props()");
       }
     }
-    for (const m of source.matchAll(/\$\s*:\s*\w+/g)) {
-      if (isRunesFile) report("svelte-5-doctor/legacy-dollars-colon", "`$:` reactive statement is invalid in runes mode — use $derived / $effect", m.index ?? 0);
+    for (const m of sourceNoComments.matchAll(/\$\s*:\s*\w+/g)) {
+      if (isRunesFile) {
+        // Use sourceNoComments to avoid $: inside // or /* comments
+        // Map index back to original source for reporting
+        const snippet = m[0];
+        const idx = source.indexOf(snippet, m.index ?? 0);
+        report("svelte-5-doctor/legacy-dollars-colon", "`$:` reactive statement is invalid in runes mode — use $derived / $effect", idx !== -1 ? idx : (m.index ?? 0));
+      }
     }
     for (const m of source.matchAll(/on:\w+\s*=/g)) report("svelte-5-doctor/legacy-event-directive", "`on:click` is deprecated in Svelte 5 — use `onclick`", m.index ?? 0, "onclick={handler}");
     for (const m of source.matchAll(/<slot\b/g)) report("svelte-5-doctor/legacy-slot", "<slot> is deprecated — use {#snippet} + {@render}", m.index ?? 0);
@@ -252,7 +260,6 @@ const runRulesOnFile = (filePath: string, source: string): Diagnostic[] => {
     }
   }
   // rune missing parens: $state without () or $derived without () — strip comments to avoid false positives in // $state docs
-  const sourceNoComments = source.replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
   for (const m of sourceNoComments.matchAll(/\$(state|derived|effect|props|bindable|inspect)(?!\s*\()/g)) {
     const full = m[0];
     // allow $effect.pending, $effect.tracking, $state.snapshot etc

@@ -10,6 +10,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runInspect } from "svelte-5-doctor-core";
 import { SVELTE_DOCTOR_RULES, RULE_MAP } from "svelte-5-doctor-core";
+import { applyFixes } from "svelte-5-doctor-core/fix";
 
 const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf-8")) as { version: string; name: string };
 
@@ -31,6 +32,8 @@ program
   .option("--base <branch>", "diff base for changed scope", "main")
   .option("--blocking <level>", "fail CI on: error | warning | none (also score <75)", "none")
   .option("--fail-on-score <n>", "fail if score < n (default 75 for --blocking error)", "75")
+  .option("--fix", "auto-fix fixable diagnostics (like Bun 1.4 --fix / oxlint --fix) — Svelte 4 deprecation, unused CSS, a11y, rune parens")
+  .option("--dry-run", "with --fix, show diff without writing (like --fix --dry-run)")
   .option("--no-color", "disable color")
   .action(async (directory: string, opts) => {
     const dir = resolve(process.cwd(), directory);
@@ -39,7 +42,49 @@ program
     const scope = opts.diff ? "changed" : (opts.scope as "full" | "changed" | "files");
 
     const started = Date.now();
-    const report = await runInspect({ directory: dir, categories: categories.length ? categories : undefined, scope });
+    let report = await runInspect({ directory: dir, categories: categories.length ? categories : undefined, scope });
+
+    // Auto-fix — like Bun 1.4 --fix / oxlint --fix: apply fixable diagnostics and re-score
+    if (opts.fix) {
+      const { readFileSync, writeFileSync } = await import("node:fs");
+      const byFile = new Map<string, typeof report.diagnostics>();
+      for (const d of report.diagnostics) {
+        if (!byFile.has(d.filePath)) byFile.set(d.filePath, []);
+        byFile.get(d.filePath)!.push(d);
+      }
+      let totalApplied = 0;
+      let totalSkipped = 0;
+      let totalFiles = 0;
+      for (const [rel, diags] of byFile) {
+        const abs = resolve(dir, rel);
+        try {
+          const src = readFileSync(abs, "utf-8");
+          const res = applyFixes(rel, src, diags);
+          if (res.applied > 0) {
+            totalApplied += res.applied;
+            totalSkipped += res.skipped;
+            totalFiles++;
+            if (!(opts.dryRun as boolean)) writeFileSync(abs, res.fixed, "utf-8");
+            console.log(pc.green(`${(opts.dryRun as boolean) ? "[dry-run] " : ""}Fixed ${res.applied} in ${rel}${res.skipped ? ` (${res.skipped} skipped)` : ""}`));
+            if (opts.dryRun as boolean) {
+              const origLines = res.original.split("\n");
+              const fixedLines = res.fixed.split("\n");
+              for (let i = 0; i < Math.min(origLines.length, fixedLines.length, 5); i++) {
+                if (origLines[i] !== fixedLines[i]) {
+                  console.log(pc.dim(`  ${i + 1}: - ${(origLines[i] ?? "").slice(0, 80)}`));
+                  console.log(pc.green(`     + ${(fixedLines[i] ?? "").slice(0, 80)}`));
+                }
+              }
+            }
+          }
+        } catch {}
+      }
+      console.log(pc.bold(`\n  Auto-fix: ${totalApplied} applied in ${totalFiles} files${(opts.dryRun as boolean) ? " (dry-run, no files written)" : ""}${totalSkipped ? `, ${totalSkipped} skipped` : ""}`));
+      const newReport = await runInspect({ directory: dir, categories: categories.length ? categories : undefined, scope });
+      console.log(pc.dim(`  Score: ${report.score} → ${newReport.score} (${newReport.label})`));
+      report = newReport;
+      if (totalApplied === 0) console.log(pc.yellow("  No fixable diagnostics found (fixable: Svelte 4 deprecation, unused CSS, a11y alt/href, rune parens)"));
+    }
 
     if (opts.score && !opts.json) {
       console.log(String(report.score));

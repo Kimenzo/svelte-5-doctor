@@ -29,6 +29,8 @@ program
   .option("--diff", "alias for --scope changed (deprecated)", false)
   .option("--scope <scope>", "scope: full | changed | files", "full")
   .option("--base <branch>", "diff base for changed scope", "main")
+  .option("--blocking <level>", "fail CI on: error | warning | none (also score <75)", "none")
+  .option("--fail-on-score <n>", "fail if score < n (default 75 for --blocking error)", "75")
   .option("--no-color", "disable color")
   .action(async (directory: string, opts) => {
     const dir = resolve(process.cwd(), directory);
@@ -53,8 +55,13 @@ program
       } else {
         console.log(out);
       }
-      const hasErrors = report.diagnostics.some((d) => d.severity === "error");
-      process.exit(hasErrors ? 1 : 0);
+      const blockingJson = (opts.blocking as string) ?? "none";
+      const failOnScoreJson = Number.parseInt((opts.failOnScore as string) ?? "75", 10);
+      const hasErrorsJson = report.diagnostics.some((d) => d.severity === "error");
+      const hasWarningsJson = report.diagnostics.some((d) => d.severity === "warn");
+      const scoreBlockedJson = report.score < failOnScoreJson && blockingJson !== "none";
+      const shouldFailJson = (blockingJson === "error" && hasErrorsJson) || (blockingJson === "warning" && (hasErrorsJson || hasWarningsJson)) || scoreBlockedJson;
+      process.exit(shouldFailJson ? 1 : 0);
     }
 
     // human output — mirrors react-doctor score header
@@ -101,8 +108,15 @@ program
     console.log(pc.dim(`  Run ${pc.bold("npx svelte-5-doctor rules list")} to see all rules.`));
     console.log("");
 
+    // Score CI gate — ported from react-doctor blocking + SCORE_BANDS (75/50) — svelte-5-doctor 0.3.0 perfection
+    const blocking = (opts.blocking as string) ?? "none";
+    const failOnScore = Number.parseInt((opts.failOnScore as string) ?? "75", 10);
     const hasErrors = report.diagnostics.some((d) => d.severity === "error");
-    process.exit(hasErrors ? 1 : 0);
+    const hasWarnings = report.diagnostics.some((d) => d.severity === "warn");
+    const scoreBlocked = report.score < failOnScore && blocking !== "none";
+    if (scoreBlocked) console.log(pc.yellow(`  Score ${report.score} < ${failOnScore} — failing due to --blocking ${blocking}`));
+    const shouldFail = (blocking === "error" && hasErrors) || (blocking === "warning" && (hasErrors || hasWarnings)) || scoreBlocked;
+    process.exit(shouldFail ? 1 : 0);
   });
 
 program

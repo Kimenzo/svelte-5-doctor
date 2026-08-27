@@ -1,6 +1,6 @@
 {
   "name": "svelte-5-doctor-core",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Svelte 5 Doctor core — diagnostic engine for Svelte 5. Ported from @react-doctor/core. Renamed from @svelte-doctor/core for npm publish (svelte-doctor taken).",
   "type": "module",
   "main": "./dist/index.js",
@@ -21,9 +21,10 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "svelte": "^5.35.0",
-    "tinyglobby": "^0.2.12",
-    "picocolors": "^1.1.1"
+    "estree-walker": "^3.0.3",
+    "picocolors": "^1.1.1",
+    "svelte": "^5.56.10",
+    "tinyglobby": "^0.2.12"
   },
   "devDependencies": {
     "typescript": "^5.9.2",

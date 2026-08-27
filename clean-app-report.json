@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 3,
+  "score": 100,
+  "label": "Great",
+  "diagnostics": [],
+  "summary": {
+    "total": 0,
+    "errors": 0,
+    "warnings": 0,
+    "byCategory": {
+      "Security": 0,
+      "Performance": 0,
+      "Correctness": 0,
+      "Accessibility": 0,
+      "Maintainability": 0,
+      "Architecture": 0
+    },
+    "affectedFiles": 0,
+    "distinctRules": 0
+  },
+  "meta": {
+    "svelteVersion": "5.56.10",
+    "scannedAt": "2026-08-27T19:29:26.322Z",
+    "directory": "clean-app",
+    "durationMs": 323
+  }
+}

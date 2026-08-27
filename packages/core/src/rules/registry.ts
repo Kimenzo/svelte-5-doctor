@@ -90,6 +90,8 @@ export const SVELTE_DOCTOR_RULES: RuleMeta[] = [
   { id: "svelte-5-doctor/kit-requested-limit", category: "Correctness", severity: "error", description: "requested() without limit or wrong shape — breaking 2.58", tags: ["correctness","sveltekit"], framework: "sveltekit" },
   { id: "svelte-5-doctor/kit-app-state-eager-init", category: "Performance", severity: "warn", description: "$app/state read at module top-level — eager leak in 2.70.3, move inside effect", tags: ["performance","sveltekit"], framework: "sveltekit" },
   { id: "svelte-5-doctor/kit-prefer-context-over-module-state", category: "Maintainability", severity: "warn", description: "Module-level $state in $lib vs createContext — SSR leak, prefer createContext", tags: ["maintainability","sveltekit"], framework: "sveltekit" },
+  { id: "svelte-5-doctor/deslop-unused-file", category: "Maintainability", severity: "warn", description: "Svelte file never imported — dead code (port of deslop-js)", tags: ["maintainability","deslop"], framework: "svelte5" },
+  { id: "svelte-5-doctor/supply-chain-outdated-svelte", category: "Security", severity: "warn", description: "Outdated svelte <5.56.10 — supply-chain risk, update", tags: ["security","supply-chain"], framework: "svelte5" },
 ];
 
 export const RULE_IDS = new Set(SVELTE_DOCTOR_RULES.map((r) => r.id));

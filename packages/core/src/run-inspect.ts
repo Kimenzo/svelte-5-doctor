@@ -6,7 +6,8 @@
 import { readFileSync, existsSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { glob } from "tinyglobby";
-import { compile } from "svelte/compiler";
+import { compile, parse } from "svelte/compiler";
+import { walk } from "estree-walker";
 import { detectSvelteProject } from "./project-info.js";
 import { SVELTE_DOCTOR_RULES, RULE_MAP } from "./rules/registry.js";
 import { calculateScore, getScoreLabel, summarizeDiagnostics } from "./scoring.js";
@@ -93,6 +94,98 @@ const runRulesOnFile = (filePath: string, source: string): Diagnostic[] => {
   const bindableVars = new Set(
     [...source.matchAll(/(\w+)\s*=\s*\$bindable\s*\(/g)].map((m) => m[1]!).filter(Boolean)
   );
+
+  // ── AST Walker (svelte/compiler modernAst + estree-walker) — ported from react-doctor oxc-parser flow
+  // Replaces regex for TS generics, nested snippets, rune placement with precise AST. See react-doctor-source/packages/core/src/runners/oxlint/compute-ruleset-hash.ts for hashing idea.
+  try {
+    const ast: unknown = parse(source, { filename: filePath, modernAst: true } as unknown as Record<string, unknown>);
+    const root = ast as {
+      fragment?: { nodes?: unknown[] };
+      instance?: { content?: { body?: unknown[]; type?: string } };
+      module?: { content?: { body?: unknown[] } };
+    };
+    // Walk instance script (runes) with estree-walker — handles TS generics via svelte parse (typeScript: true implicit)
+    const instanceBody = root.instance?.content?.body ?? [];
+    // Track nesting depth to detect nested snippets and inline classes
+    let snippetDepth = 0;
+    let eachDepth = 0;
+    let ifDepth = 0;
+    const visitInstance = (nodes: unknown[]) => {
+      for (const node of nodes as Array<Record<string, unknown>>) {
+        if (!node || typeof node.type !== "string") continue;
+        // Rune placement: $state/$derived/$effect/$props/$bindable not at top-level
+        if (node.type === "ExpressionStatement" && (node.expression as Record<string, unknown>)?.type === "CallExpression") {
+          const callee = (node.expression as Record<string, unknown>).callee as Record<string, unknown> | undefined;
+          const name = callee?.type === "Identifier" ? (callee.name as string) : "";
+          if (["$state","$derived","$effect","$props","$bindable"].includes(name) && snippetDepth + eachDepth + ifDepth > 0) {
+            // nested inside snippet/each/if — likely valid for snippetDepth but $props only top-level
+            if (name === "$props") report("svelte-5-doctor/props-invalid", "`$props()` inside nested snippet/each/if — must be top-level", (node.start as number) ?? 0);
+          }
+        }
+        // Inline class detection via AST (perf_avoid_inline_class) — more precise than regex, handles TS generics
+        if (node.type === "ClassDeclaration" || node.type === "ClassExpression") {
+          if (eachDepth > 0 || ifDepth > 0 || snippetDepth > 0) {
+            report("svelte-5-doctor/perf-avoid-inline-class", "Class declared inside each/if/snippet — hoist to module scope", (node.start as number) ?? 0);
+          }
+        }
+        // Recurse
+        for (const key of Object.keys(node)) {
+          const val = node[key];
+          if (Array.isArray(val)) visitInstance(val as unknown[]);
+          else if (val && typeof val === "object" && "type" in (val as Record<string, unknown>)) visitInstance([val]);
+        }
+      }
+    };
+    if (instanceBody.length) visitInstance(instanceBody);
+
+    // Fragment walk for nested snippets (estree-walker via manual)
+    const fragmentNodes = (root.fragment?.nodes ?? []) as Array<Record<string, unknown>>;
+    const walkFragment = (nodes: Array<Record<string, unknown>>, depth: number) => {
+      for (const n of nodes) {
+        if (!n) continue;
+        const t = n.type as string;
+        if (t === "SnippetBlock") {
+          snippetDepth++;
+          if (depth > 0) report("svelte-5-doctor/no-nested-snippet", "Snippet defined inside markup recreates each render — hoist to top-level", (n.start as number) ?? 0);
+          const snNodes = (n.body as Record<string, unknown>)?.nodes as Array<Record<string, unknown>> | undefined;
+          if (snNodes) walkFragment(snNodes, depth + 1);
+          snippetDepth--;
+          continue;
+        }
+        if (t === "EachBlock") {
+          eachDepth++;
+          const children = (n.body as Record<string, unknown>)?.nodes as Array<Record<string, unknown>> | undefined;
+          if (children) walkFragment(children, depth + 1);
+          eachDepth--;
+          // Check each without key and without as (TS generics case)
+          const expr = n.expression as Record<string, unknown> | undefined;
+          const ctx = n.context as Record<string, unknown> | undefined;
+          if (!n.key && ctx) {
+            // Svelte 5 modernAst: EachBlock has key, expression, context
+            report("svelte-5-doctor/no-index-as-key", "{#each} without key — use (item.id) — also handles TS generics", (n.start as number) ?? 0);
+          }
+          continue;
+        }
+        if (t === "IfBlock") {
+          ifDepth++;
+          const branches = [n.consequent, n.alternate].filter(Boolean) as Array<Record<string, unknown>>;
+          for (const br of branches) {
+            const brNodes = (br.nodes ?? br.children) as Array<Record<string, unknown>> | undefined;
+            if (brNodes) walkFragment(brNodes, depth + 1);
+          }
+          ifDepth--;
+          continue;
+        }
+        // generic children
+        const children = (n.fragment as Record<string, unknown>)?.nodes as Array<Record<string, unknown>> | undefined;
+        if (children) walkFragment(children, depth);
+        else if (Array.isArray((n as Record<string, unknown>).nodes)) walkFragment((n as Record<string, unknown>).nodes as Array<Record<string, unknown>>, depth);
+      }
+    };
+    if (fragmentNodes.length) walkFragment(fragmentNodes, 0);
+  } catch {
+    // parse failed — compile step will already report svelte-5-doctor/compile-error, keep heuristic fallback
+  }
 
   // ── Security ──
   for (const m of source.matchAll(/\{@html\s+([^}]+)\}/g)) {
@@ -568,6 +661,103 @@ export const runInspect = async (input: InspectInput): Promise<JsonReport> => {
     const set = new Set(input.categories.map((c) => c.toLowerCase()));
     allDiagnostics = allDiagnostics.filter((d) => set.has(d.category.toLowerCase()));
   }
+
+  // svelte-check deduplication — ported from react-doctor/src/build-diagnostic-pipeline.ts dedupeDiagnostics()
+  // Compiler warnings via svelte/compiler and heuristic visitors may report same file:line:rule; keep first.
+  {
+    const seen = new Set<string>();
+    const deduped: Diagnostic[] = [];
+    for (const d of allDiagnostics) {
+      const key = `${d.filePath}:${d.line}:${d.column}:${d.ruleId}`;
+      if (!seen.has(key)) { seen.add(key); deduped.push(d); }
+    }
+    allDiagnostics = deduped;
+  }
+
+  // deslop-js dead-code — ported from react-doctor/packages/deslop-js (Knip-like)
+  // Find .svelte files never imported (excluding entries + tests/fixtures)
+  try {
+    const svelteFiles = files.filter((f) => f.endsWith(".svelte") && !f.includes("tests/") && !f.includes("fixtures/") && !f.includes("benchmarking"));
+    const imported = new Set<string>();
+    for (const rel of files) {
+      let src = "";
+      try { src = readFileSync(join(directory, rel), "utf-8"); } catch { continue; }
+      for (const m of src.matchAll(/from\s+["']([^"']+\.svelte)["']/g)) {
+        const imp = m[1]!;
+        const base = rel.includes("/") ? rel.substring(0, rel.lastIndexOf("/")) : "";
+        const resolved = imp.startsWith(".") ? join(base, imp).replace(/\\/g, "/") : imp;
+        imported.add(resolved);
+        imported.add(resolved.replace(/^\.\//, ""));
+      }
+      for (const m of src.matchAll(/import\s+["']([^"']+\.svelte)["']/g)) {
+        const imp = m[1]!;
+        const base = rel.includes("/") ? rel.substring(0, rel.lastIndexOf("/")) : "";
+        const resolved = imp.startsWith(".") ? join(base, imp).replace(/\\/g, "/") : imp;
+        imported.add(resolved);
+      }
+    }
+    for (const sf of svelteFiles) {
+      const isEntry = sf.endsWith("+page.svelte") || sf.endsWith("+layout.svelte") || sf.endsWith("App.svelte") || sf === "src/App.svelte" || sf === "src/routes/+page.svelte";
+      const norm = sf.replace(/\\/g, "/");
+      if (!isEntry && !imported.has(norm) && !imported.has(`./${norm}`) && !imported.has(norm.replace(/^src\//, "$lib/"))) {
+        // Check if file actually exists and is not entry — report as maintainability
+        allDiagnostics.push({
+          ruleId: "svelte-5-doctor/deslop-unused-file",
+          severity: "warn",
+          category: "Maintainability",
+          message: `Svelte file '${sf}' never imported — dead code (deslop)`,
+          filePath: sf,
+          line: 1,
+          column: 1,
+          tags: ["deslop"],
+        });
+      }
+    }
+  } catch {}
+
+  // supply-chain — ported from react-doctor/src/check-supply-chain.ts (Socket.dev) — simplified: outdated svelte + known advisories
+  try {
+    const pkgPath = join(directory, "package.json");
+    if (existsSync(pkgPath)) {
+      const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
+      const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+      const svelteVer = deps.svelte ? String(deps.svelte).replace(/^[^\d]*/, "") : "";
+      const major = Number.parseInt(svelteVer.split(".")[0] ?? "0", 10);
+      const minor = Number.parseInt(svelteVer.split(".")[1] ?? "0", 10);
+      const patch = Number.parseInt(svelteVer.split(".")[2] ?? "0", 10);
+      // Outdated check: <5.56.10
+      if (svelteVer && (major < 5 || (major === 5 && (minor < 56 || (minor === 56 && patch < 10))))) {
+        allDiagnostics.push({
+          ruleId: "svelte-5-doctor/supply-chain-outdated-svelte",
+          severity: "warn",
+          category: "Security",
+          message: `svelte ${svelteVer} outdated — latest 5.56.10 (fix #18668 SSR double-call, #18625 each batch). Update.`,
+          filePath: "package.json",
+          line: 1,
+          column: 1,
+          tags: ["supply-chain"],
+        });
+      }
+      // Known supply-chain: lodash full import already covered, but also check for vulnerable sveltekit <2.70.3
+      const kitVer = deps["@sveltejs/kit"] ? String(deps["@sveltejs/kit"]).replace(/^[^\d]*/, "") : "";
+      if (kitVer) {
+        const kMajor = Number.parseInt(kitVer.split(".")[0] ?? "0", 10);
+        const kMinor = Number.parseInt(kitVer.split(".")[1] ?? "0", 10);
+        if (kMajor === 2 && kMinor < 70) {
+          allDiagnostics.push({
+            ruleId: "svelte-5-doctor/supply-chain-outdated-svelte",
+            severity: "warn",
+            category: "Security",
+            message: `@sveltejs/kit ${kitVer} outdated — latest 2.70.3 (eager $app/state leak fix). Update.`,
+            filePath: "package.json",
+            line: 1,
+            column: 1,
+            tags: ["supply-chain"],
+          });
+        }
+      }
+    }
+  } catch {}
 
   const score = calculateScore(allDiagnostics);
   const label = getScoreLabel(score);

@@ -9,19 +9,19 @@
    bunx @rayhanadev/truffler "no-at-html" packages --kind function --limit 20
    ```
 
-2. **Create single file** `packages/svelte-plugin-svelte-doctor/src/rules/<bucket>/<id>.ts` or add to `@svelte-doctor/core/src/rules/registry.ts`:
+2. **Create single file** `packages/svelte-plugin-svelte-5-doctor/src/rules/<bucket>/<id>.ts` or add to `svelte-5-doctor-core/src/rules/registry.ts`:
 
    ```ts
    import { defineRule } from "../define-rule.js";
 
    export const noAtHtmlXss = defineRule({
-     id: "svelte-doctor/no-at-html-xss",
+     id: "svelte-5-doctor/no-at-html-xss",
      category: "Security",
      severity: "error",
      description: "Disallows unsanitized {@html}",
      create: (ctx) => {
        for (const m of ctx.source.matchAll(/\{@html\s+([^}]+)\}/g)) {
-         ctx.report({ ruleId: "svelte-doctor/no-at-html-xss", severity: "error", category: "Security", message: `{@html} XSS — sanitize`, line: 1, column: 1 });
+         ctx.report({ ruleId: "svelte-5-doctor/no-at-html-xss", severity: "error", category: "Security", message: `{@html} XSS — sanitize`, line: 1, column: 1 });
        }
      },
    });

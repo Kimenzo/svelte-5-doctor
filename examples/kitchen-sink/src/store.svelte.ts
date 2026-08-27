@@ -1,7 +1,7 @@
 // Shared state module — triggers SSR leak detection
-// svelte-doctor/state-invalid-export when reassigned export
+// svelte-5-doctor/state-invalid-export when reassigned export
 
-export let count = $state(0); // svelte-doctor/state-invalid-export
+export let count = $state(0); // svelte-5-doctor/state-invalid-export
 count += 1; // reassignment after export
 
 // Correct pattern (for reference):

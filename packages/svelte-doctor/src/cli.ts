@@ -8,16 +8,16 @@ import pc from "picocolors";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { runInspect } from "@svelte-doctor/core";
-import { SVELTE_DOCTOR_RULES, RULE_MAP } from "@svelte-doctor/core";
+import { runInspect } from "svelte-5-doctor-core";
+import { SVELTE_DOCTOR_RULES, RULE_MAP } from "svelte-5-doctor-core";
 
 const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf-8")) as { version: string; name: string };
 
 const program = new Command();
 
 program
-  .name("svelte-doctor")
-  .description("Svelte Doctor — 0-100 health check for Svelte 5 codebases. Ported from React Doctor.")
+  .name("svelte-5-doctor")
+  .description("Svelte 5 Doctor — 0-100 health check for Svelte 5 codebases. Ported from React Doctor. (svelte-doctor alias kept for compat)")
   .version(pkg.version, "-v, --version", "output the version number")
   .argument("[directory]", "directory to scan", ".")
   .option("--json", "output JSON report")
@@ -97,8 +97,8 @@ program
       console.log(pc.dim(`  skipped: ${report.skippedCheckReasons.length} checks`));
     }
 
-    console.log(pc.dim(`  Run ${pc.bold("npx svelte-doctor --json --json-out report.json")} for machine-readable output.`));
-    console.log(pc.dim(`  Run ${pc.bold("npx svelte-doctor rules list")} to see all rules.`));
+    console.log(pc.dim(`  Run ${pc.bold("npx svelte-5-doctor --json --json-out report.json")} for machine-readable output.`));
+    console.log(pc.dim(`  Run ${pc.bold("npx svelte-5-doctor rules list")} to see all rules.`));
     console.log("");
 
     const hasErrors = report.diagnostics.some((d) => d.severity === "error");
@@ -119,7 +119,7 @@ program
     const targetId = ruleId;
 
     if (subCmd === "explain" && targetId) {
-      const rule = RULE_MAP.get(targetId) ?? RULE_MAP.get(`svelte-doctor/${targetId}`);
+      const rule = RULE_MAP.get(targetId) ?? RULE_MAP.get(`svelte-doctor/${targetId}`) ?? RULE_MAP.get(`svelte-5-doctor/${targetId}`);
       if (!rule) {
         console.error(pc.red(`Unknown rule: ${targetId}`));
         process.exit(1);
@@ -145,7 +145,7 @@ program
       console.log(`  ${sev.padEnd(10)} ${pc.bold(r.id)}  ${pc.dim(`[${r.category}]`)}  ${r.description}`);
     }
     console.log("");
-    console.log(pc.dim(`Run ${pc.bold("npx svelte-doctor rules explain <ruleId>")} for details.`));
+    console.log(pc.dim(`Run ${pc.bold("npx svelte-5-doctor rules explain <ruleId>")} for details.`));
   });
 
 program

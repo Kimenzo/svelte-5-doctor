@@ -33,7 +33,7 @@ inputs:
     description: "Node.js version"
     default: "24"
   version:
-    description: "svelte-doctor npm version or package spec"
+    description: "svelte-5-doctor npm version or package spec"
     default: "latest"
 
 outputs:
@@ -74,8 +74,8 @@ runs:
       if: ${{ steps.resolve-version.outputs.cacheable == 'true' }}
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
-        path: ${{ runner.temp }}/svelte-doctor-toolchain
-        key: svelte-doctor-toolchain-${{ steps.resolve-version.outputs.resolved }}-node${{ inputs.node-version }}-${{ runner.os }}-${{ runner.arch }}
+        path: ${{ runner.temp }}/svelte-5-doctor-toolchain
+        key: svelte-5-doctor-toolchain-${{ steps.resolve-version.outputs.resolved }}-node${{ inputs.node-version }}-${{ runner.os }}-${{ runner.arch }}
 
     - id: base
       if: ${{ github.event_name == 'pull_request' && inputs.scope != 'full' }}
@@ -83,7 +83,7 @@ runs:
       env:
         INPUT_DIRECTORY: ${{ inputs.directory }}
         BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        CHANGED_FILES_FILE: ${{ runner.temp }}/svelte-doctor-changed-files.txt
+        CHANGED_FILES_FILE: ${{ runner.temp }}/svelte-5-doctor-changed-files.txt
       run: |
         if [ -n "$BASE_SHA" ] && git -C "$INPUT_DIRECTORY" rev-parse --git-dir >/dev/null 2>&1; then
           git -C "$INPUT_DIRECTORY" fetch --no-tags --depth=1 origin "$BASE_SHA" 2>/dev/null || true
@@ -97,7 +97,7 @@ runs:
           *$'\n'*) SCAN_PREFIX="." ;;
         esac
         echo "prefix=$SCAN_PREFIX" >> "$GITHUB_OUTPUT"
-        RAW_CHANGED="${RUNNER_TEMP:-/tmp}/svelte-doctor-raw-changed.txt"
+        RAW_CHANGED="${RUNNER_TEMP:-/tmp}/svelte-5-doctor-raw-changed.txt"
         if [ -n "$BASE_SHA" ] && git -C "$INPUT_DIRECTORY" diff --name-only --diff-filter=AMR "$BASE_SHA...HEAD" > "$RAW_CHANGED" 2>/dev/null; then
           node "$GITHUB_ACTION_PATH/scripts/normalize-changed-files.mjs" "$SCAN_PREFIX" "$CHANGED_FILES_FILE" < "$RAW_CHANGED"
           echo "path=$CHANGED_FILES_FILE" >> "$GITHUB_OUTPUT"
@@ -109,7 +109,7 @@ runs:
       if: ${{ github.event_name == 'pull_request' && inputs.scope != 'full' && steps.base.outputs.path == '' }}
       uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
       env:
-        SVELTE_DOCTOR_CHANGED_FILES: ${{ runner.temp }}/svelte-doctor-changed-files.txt
+        SVELTE_DOCTOR_CHANGED_FILES: ${{ runner.temp }}/svelte-5-doctor-changed-files.txt
         INPUT_DIRECTORY: ${{ steps.base.outputs.prefix || inputs.directory }}
         COMPOSITE_ACTION_PATH: ${{ github.action_path }}
       with:
@@ -139,13 +139,13 @@ runs:
         CHANGED_FILES_FROM: ${{ steps.base.outputs.path || steps.pr-files.outputs.path }}
         SVELTE_DOCTOR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         RUNNER_TEMP: ${{ runner.temp }}
-        SVELTE_DOCTOR_CACHE_DIR: ${{ runner.temp }}/svelte-doctor-cache
+        SVELTE_DOCTOR_CACHE_DIR: ${{ runner.temp }}/svelte-5-doctor-cache
         GITHUB_RUN_ID: ${{ github.run_id }}
         SVELTE_DOCTOR_GITHUB_ACTION: ${{ github.action_ref || '1' }}
       run: |
-        REPORT_FILE="${RUNNER_TEMP:-/tmp}/svelte-doctor-report-${GITHUB_RUN_ID:-$$}.json"
+        REPORT_FILE="${RUNNER_TEMP:-/tmp}/svelte-5-doctor-report-${GITHUB_RUN_ID:-$$}.json"
         echo "report-file=$REPORT_FILE" >> "$GITHUB_OUTPUT"
-        mkdir -p "${RUNNER_TEMP:-/tmp}/svelte-doctor-cache"
+        mkdir -p "${RUNNER_TEMP:-/tmp}/svelte-5-doctor-cache"
         FLAGS=("--json" "--json-compact")
         if [ -n "$INPUT_BLOCKING" ]; then FLAGS+=("--blocking" "$INPUT_BLOCKING"); fi
         if [ -n "$INPUT_PROJECT" ]; then FLAGS+=("--project" "$INPUT_PROJECT"); fi
@@ -155,21 +155,21 @@ runs:
           case "$SCOPE" in files|lines|changed) FLAGS+=("--scope" "$SCOPE");; *) FLAGS+=("--scope" "changed");; esac
           FLAGS+=("--changed-files-from" "$CHANGED_FILES_FROM")
         fi
-        TOOLCHAIN_DIR="${RUNNER_TEMP:-/tmp}/svelte-doctor-toolchain"
+        TOOLCHAIN_DIR="${RUNNER_TEMP:-/tmp}/svelte-5-doctor-toolchain"
         SD_BIN=""
         if [ "$CACHEABLE" = "true" ]; then
           set +e
-          if ! "$TOOLCHAIN_DIR/node_modules/.bin/svelte-doctor" --version >/dev/null 2>&1; then
+          if ! "$TOOLCHAIN_DIR/node_modules/.bin/svelte-5-doctor" --version >/dev/null 2>&1; then
             mkdir -p "$TOOLCHAIN_DIR"
             npm install --prefix "$TOOLCHAIN_DIR" --no-save --no-audit --no-fund "$PACKAGE_SPEC"
           fi
-          if "$TOOLCHAIN_DIR/node_modules/.bin/svelte-doctor" --version >/dev/null 2>&1; then SD_BIN="$TOOLCHAIN_DIR/node_modules/.bin/svelte-doctor"
+          if "$TOOLCHAIN_DIR/node_modules/.bin/svelte-5-doctor" --version >/dev/null 2>&1; then SD_BIN="$TOOLCHAIN_DIR/node_modules/.bin/svelte-5-doctor"
           else rm -rf "$TOOLCHAIN_DIR"; fi
           set -e
         fi
         set +e
         if [ -n "$SD_BIN" ]; then "$SD_BIN" "$INPUT_DIRECTORY" "${FLAGS[@]}" > "$REPORT_FILE"
-        else npm exec --yes --package "$PACKAGE_SPEC" -- svelte-doctor "$INPUT_DIRECTORY" "${FLAGS[@]}" > "$REPORT_FILE"; fi
+        else npm exec --yes --package "$PACKAGE_SPEC" -- svelte-5-doctor "$INPUT_DIRECTORY" "${FLAGS[@]}" > "$REPORT_FILE"; fi
         SCAN_STATUS=$?
         set -e
         if ! node "$GITHUB_ACTION_PATH/scripts/ensure-json-report.mjs" "$REPORT_FILE" "$SCAN_STATUS"; then SCAN_STATUS=1; fi
@@ -179,15 +179,15 @@ runs:
       if: ${{ always() && steps.scan.outcome == 'success' && steps.resolve-version.outputs.cacheable == 'true' }}
       uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
       with:
-        path: ${{ runner.temp }}/svelte-doctor-cache
-        key: svelte-doctor-scan-cache-${{ runner.os }}-${{ runner.arch }}-${{ steps.resolve-version.outputs.resolved }}-${{ github.run_id }}-${{ github.run_attempt }}
+        path: ${{ runner.temp }}/svelte-5-doctor-cache
+        key: svelte-5-doctor-scan-cache-${{ runner.os }}-${{ runner.arch }}-${{ steps.resolve-version.outputs.resolved }}-${{ github.run_id }}-${{ github.run_attempt }}
 
     - id: render
       if: always()
       shell: bash
       env:
         REPORT_FILE: ${{ steps.scan.outputs.report-file }}
-        COMMENT_FILE: ${{ runner.temp }}/svelte-doctor-comment.md
+        COMMENT_FILE: ${{ runner.temp }}/svelte-5-doctor-comment.md
         GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         SVELTE_DOCTOR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         SVELTE_DOCTOR_SILENCE_MISSING_BASELINE_WARNING: ${{ inputs.silence-missing-baseline-warning }}
@@ -209,7 +209,7 @@ runs:
           if (!p || !fs.existsSync(p)) return;
           const body = fs.readFileSync(p,"utf8").trim(); if (!body) return;
           const skipped = process.env.SVELTE_DOCTOR_SKIPPED==="true";
-          const marker="<!-- svelte-doctor:summary -->";
+          const marker="<!-- svelte-5-doctor:summary -->";
           try{
             const {data:comments}=await github.rest.issues.listComments({...context.repo,issue_number:context.issue.number,per_page:100});
             const prev=comments.find(c=>c.body?.startsWith(marker));
@@ -233,14 +233,14 @@ runs:
           let r; try{r=JSON.parse(fs.readFileSync(p,"utf8"))}catch{return}
           if(r.ok===false) return;
           const diags=Array.isArray(r.diagnostics)?r.diagnostics:[];
-          const marker="<!-- svelte-doctor:review -->";
+          const marker="<!-- svelte-5-doctor:review -->";
           const prefix=(process.env.INPUT_DIRECTORY||".").replace(/^\.\/?/,"").replace(/\/$/,"");
           let files; try{files=await github.paginate(github.rest.pulls.listFiles,{...context.repo,pull_number:pr.number,per_page:100})}catch(e){core.warning(e.message);return}
           const byFile=new Map();
           for(const f of files){ if(!f.patch) continue; const set=new Set(); let n=0; for(const l of f.patch.split("\n")){ const h=l.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/); if(h){n=Number(h[1]);continue} if(l.startsWith("+")||l.startsWith(" ")){set.add(n);n++}} byFile.set(f.filename,set)}
           const toRepo=p2=>{ const n=String(p2||"").replace(/\\/g,"/").replace(/^\.\//,""); if(byFile.has(n)) return n; const pref=prefix?`${prefix}/${n}`:n; if(byFile.has(pref)) return pref; const s=[...byFile.keys()].filter(k=>k.endsWith(`/${n}`)); return s.length===1?s[0]:null}
           const seen=new Set(); const comments=[];
-          for(const d of diags){ if(!d||typeof d.line!=="number"||d.line<=0) continue; const rp=toRepo(d.filePath); if(!rp) continue; const s=byFile.get(rp); if(!s||!s.has(d.line)) continue; const k=`${rp}:${d.line}:${d.rule}`; if(seen.has(k)) continue; seen.add(k); const sev=d.severity==="error"?"error":"warning"; const fix=d.help?`\n\n**Fix** → ${d.help}`:""; comments.push({path:rp,line:d.line,side:"RIGHT",body:`${marker}\n**Svelte Doctor** · \`${d.rule}\` _(${sev})_\n\n${d.message}${fix}\n\n[Docs](https://github.com/Kimenzo/svelte-doctor)`})}
+          for(const d of diags){ if(!d||typeof d.line!=="number"||d.line<=0) continue; const rp=toRepo(d.filePath); if(!rp) continue; const s=byFile.get(rp); if(!s||!s.has(d.line)) continue; const k=`${rp}:${d.line}:${d.rule}`; if(seen.has(k)) continue; seen.add(k); const sev=d.severity==="error"?"error":"warning"; const fix=d.help?`\n\n**Fix** → ${d.help}`:""; comments.push({path:rp,line:d.line,side:"RIGHT",body:`${marker}\n**Svelte Doctor** · \`${d.rule}\` _(${sev})_\n\n${d.message}${fix}\n\n[Docs](https://github.com/Kimenzo/svelte-5-doctor)`})}
           if(comments.length===0 && diags.length>0) return;
           let prior=[]; try{ const e=await github.paginate(github.rest.pulls.listReviewComments,{...context.repo,pull_number:pr.number,per_page:100}); prior=e.filter(c=>c.body&&c.body.startsWith(marker)).map(c=>c.id)}catch(e){core.warning(e.message)}
           if(comments.length>0){ try{ await github.rest.pulls.createReview({...context.repo,pull_number:pr.number,event:"COMMENT",comments:comments.slice(0,50)})}catch(e){core.warning(e.message);return}}

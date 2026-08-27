@@ -1,9 +1,10 @@
 {
-  "name": "svelte-doctor",
+  "name": "svelte-5-doctor",
   "version": "0.1.0",
-  "description": "Svelte Doctor CLI — 0-100 health check for Svelte 5. Ported from React Doctor (millionco/react-doctor).",
+  "description": "Svelte 5 Doctor — 0-100 health check for Svelte 5. Ported from React Doctor (millionco/react-doctor). Renamed from svelte-doctor (taken on npm by pimatis/svelte-doctor).",
   "type": "module",
   "bin": {
+    "svelte-5-doctor": "./dist/cli.js",
     "svelte-doctor": "./dist/cli.js"
   },
   "exports": {
@@ -20,7 +21,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@svelte-doctor/core": "workspace:*",
+    "svelte-5-doctor-core": "workspace:*",
     "commander": "^14.0.3",
     "picocolors": "^1.1.1",
     "tinyglobby": "^0.2.12"

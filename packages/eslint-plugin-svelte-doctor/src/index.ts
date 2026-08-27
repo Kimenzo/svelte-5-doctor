@@ -2,7 +2,7 @@
  * eslint-plugin-svelte-doctor — ported from eslint-plugin-react-doctor
  * ESLint flat-config wrapper of svelte-plugin-svelte-doctor rules.
  */
-import { SVELTE_DOCTOR_RULES } from "@svelte-doctor/core";
+import { SVELTE_DOCTOR_RULES } from "svelte-5-doctor-core";
 
 const rules: Record<string, unknown> = Object.fromEntries(
   SVELTE_DOCTOR_RULES.map((r) => [
@@ -19,7 +19,7 @@ const recommendedRules: Record<string, string> = Object.fromEntries(
 );
 
 export const plugin = {
-  meta: { name: "eslint-plugin-svelte-doctor", version: "0.1.0" },
+  meta: { name: "eslint-plugin-svelte-5-doctor", version: "0.1.0" },
   rules,
   configs: {
     recommended: { plugins: ["svelte-doctor"], rules: recommendedRules },

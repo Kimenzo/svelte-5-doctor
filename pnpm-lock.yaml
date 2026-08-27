@@ -45,13 +45,13 @@ importers:
 
   packages/eslint-plugin-svelte-doctor:
     dependencies:
-      '@svelte-doctor/core':
-        specifier: workspace:*
-        version: link:../core
       eslint:
         specifier: '>=8.0.0'
         version: 10.9.1
-      svelte-plugin-svelte-doctor:
+      svelte-5-doctor-core:
+        specifier: workspace:*
+        version: link:../core
+      svelte-plugin-svelte-5-doctor:
         specifier: workspace:*
         version: link:../svelte-plugin-svelte-doctor
     devDependencies:
@@ -61,15 +61,15 @@ importers:
 
   packages/svelte-doctor:
     dependencies:
-      '@svelte-doctor/core':
-        specifier: workspace:*
-        version: link:../core
       commander:
         specifier: ^14.0.3
         version: 14.0.3
       picocolors:
         specifier: ^1.1.1
         version: 1.1.1
+      svelte-5-doctor-core:
+        specifier: workspace:*
+        version: link:../core
       tinyglobby:
         specifier: ^0.2.12
         version: 0.2.17
@@ -89,12 +89,12 @@ importers:
 
   packages/svelte-plugin-svelte-doctor:
     dependencies:
-      '@svelte-doctor/core':
-        specifier: workspace:*
-        version: link:../core
       svelte:
         specifier: ^5.35.0
         version: 5.56.10
+      svelte-5-doctor-core:
+        specifier: workspace:*
+        version: link:../core
     devDependencies:
       typescript:
         specifier: ^5.9.2

@@ -18,10 +18,10 @@
 
 ```
 packages/
-  core/                          # @svelte-doctor/core — diagnostic engine (svelte/compiler)
-  svelte-doctor/                 # CLI (svelte-doctor bin)
-  svelte-plugin-svelte-doctor/   # 48 rules — port of oxlint-plugin-react-doctor (287 rules)
-  eslint-plugin-svelte-doctor/   # ESLint flat-config wrapper
+  core/                          # svelte-5-doctor-core — diagnostic engine (svelte/compiler)
+  svelte-5-doctor/                 # CLI (svelte-5-doctor bin)
+  svelte-plugin-svelte-5-doctor/   # 48 rules — port of oxlint-plugin-react-doctor (287 rules)
+  eslint-plugin-svelte-5-doctor/   # ESLint flat-config wrapper
 ```
 
 ## Rule Authoring

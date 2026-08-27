@@ -60,41 +60,41 @@ const runRulesOnFile = (filePath: string, source: string): Diagnostic[] => {
     const expr = m[1]?.trim() ?? "";
     const isSanitized = /DOMPurify\s*\.\s*sanitize|TrustedHTML|createHTML|Sanitizer\s*\./.test(source);
     if (!isSanitized) {
-      report("svelte-doctor/no-at-html-xss", `{@html ${expr}} renders raw HTML without sanitization — XSS risk. Sanitize with DOMPurify.sanitize() or TrustedHTML.`, m.index ?? 0, "Sanitize before {@html}: DOMPurify.sanitize(expr)");
+      report("svelte-5-doctor/no-at-html-xss", `{@html ${expr}} renders raw HTML without sanitization — XSS risk. Sanitize with DOMPurify.sanitize() or TrustedHTML.`, m.index ?? 0, "Sanitize before {@html}: DOMPurify.sanitize(expr)");
     }
   }
   // eval
-  for (const m of source.matchAll(/\beval\s*\(/g)) report("svelte-doctor/no-eval", "eval() is dangerous — avoid dynamic code execution.", m.index ?? 0);
-  for (const m of source.matchAll(/\bnew\s+Function\s*\(/g)) report("svelte-doctor/no-eval", "new Function() is eval-like — avoid.", m.index ?? 0);
+  for (const m of source.matchAll(/\beval\s*\(/g)) report("svelte-5-doctor/no-eval", "eval() is dangerous — avoid dynamic code execution.", m.index ?? 0);
+  for (const m of source.matchAll(/\bnew\s+Function\s*\(/g)) report("svelte-5-doctor/no-eval", "new Function() is eval-like — avoid.", m.index ?? 0);
   // secrets
   for (const m of source.matchAll(/\b(api[_-]?key|secret|password|token)\s*[:=]\s*["'][A-Za-z0-9_\-]{16,}["']/gi))
-    report("svelte-doctor/no-secrets-in-client-code", `Possible hardcoded secret: ${m[0].slice(0, 40)}...`, m.index ?? 0);
+    report("svelte-5-doctor/no-secrets-in-client-code", `Possible hardcoded secret: ${m[0].slice(0, 40)}...`, m.index ?? 0);
   // iframe sandbox
   for (const m of source.matchAll(/<iframe\b(?![^>]*\bsandbox\b)[^>]*>/gi))
-    report("svelte-doctor/iframe-missing-sandbox", "<iframe> missing sandbox attribute.", m.index ?? 0);
+    report("svelte-5-doctor/iframe-missing-sandbox", "<iframe> missing sandbox attribute.", m.index ?? 0);
   // DOM clobbering: attribute spreading on input inside form
   if (/<form\b[^>]*>[\s\S]*?\{...[^}]+\}[\s\S]*?<input\b/i.test(source)) {
     const idx = source.search(/\{.../);
-    if (idx !== -1) report("svelte-doctor/dom-clobbering-risk", "Attribute spreading inside <form> can enable DOM clobbering (CVE-2026-42573). Avoid spreading user-controlled 'name' onto inputs.", idx);
+    if (idx !== -1) report("svelte-5-doctor/dom-clobbering-risk", "Attribute spreading inside <form> can enable DOM clobbering (CVE-2026-42573). Avoid spreading user-controlled 'name' onto inputs.", idx);
   }
 
   // ── Correctness: legacy syntax ──
   if (isRunesFile || isSvelte) {
     for (const m of source.matchAll(/\bexport\s+let\s+\w+/g)) {
       if (isRunesFile || source.includes("$props") || source.includes("$state")) {
-        report("svelte-doctor/legacy-export-let", "`export let` is invalid in runes mode — use `let { prop } = $props()`", m.index ?? 0, "let { prop } = $props()");
+        report("svelte-5-doctor/legacy-export-let", "`export let` is invalid in runes mode — use `let { prop } = $props()`", m.index ?? 0, "let { prop } = $props()");
       }
     }
     for (const m of source.matchAll(/\$\s*:\s*\w+/g)) {
-      if (isRunesFile) report("svelte-doctor/legacy-dollars-colon", "`$:` reactive statement is invalid in runes mode — use $derived / $effect", m.index ?? 0);
+      if (isRunesFile) report("svelte-5-doctor/legacy-dollars-colon", "`$:` reactive statement is invalid in runes mode — use $derived / $effect", m.index ?? 0);
     }
-    for (const m of source.matchAll(/on:\w+\s*=/g)) report("svelte-doctor/legacy-event-directive", "`on:click` is deprecated in Svelte 5 — use `onclick`", m.index ?? 0, "onclick={handler}");
-    for (const m of source.matchAll(/<slot\b/g)) report("svelte-doctor/legacy-slot", "<slot> is deprecated — use {#snippet} + {@render}", m.index ?? 0);
+    for (const m of source.matchAll(/on:\w+\s*=/g)) report("svelte-5-doctor/legacy-event-directive", "`on:click` is deprecated in Svelte 5 — use `onclick`", m.index ?? 0, "onclick={handler}");
+    for (const m of source.matchAll(/<slot\b/g)) report("svelte-5-doctor/legacy-slot", "<slot> is deprecated — use {#snippet} + {@render}", m.index ?? 0);
     // mixed syntax
     if (/on:\w+/.test(source) && /\bonclick\b/.test(source))
-      report("svelte-doctor/mixed-event-syntax", "Mixing `on:click` and `onclick` — use Svelte 5 `onclick` only.", source.indexOf("on:"));
+      report("svelte-5-doctor/mixed-event-syntax", "Mixing `on:click` and `onclick` — use Svelte 5 `onclick` only.", source.indexOf("on:"));
     if (/<slot/.test(source) && /\{@render/.test(source))
-      report("svelte-doctor/slot-snippet-conflict", "Mixing <slot> and {@render} in same file.", source.indexOf("<slot"));
+      report("svelte-5-doctor/slot-snippet-conflict", "Mixing <slot> and {@render} in same file.", source.indexOf("<slot"));
   }
 
   // ── Correctness: rune placement ──
@@ -104,7 +104,7 @@ const runRulesOnFile = (filePath: string, source: string): Diagnostic[] => {
     // Top-level $state inside non-.svelte.js module export reassignment check
     if (filePath.endsWith(".svelte.js") || filePath.endsWith(".svelte.ts")) {
       if (/export\s+let\s+\w+\s*=\s*\$state/.test(source) && /\w+\s*\+=|\w+\s*=/.test(source.slice((m.index ?? 0) + 10, (m.index ?? 0) + 200))) {
-        report("svelte-doctor/state-invalid-export", "Exporting reassigned $state from .svelte.js leaks across SSR requests — export const instance or getter.", m.index ?? 0);
+        report("svelte-5-doctor/state-invalid-export", "Exporting reassigned $state from .svelte.js leaks across SSR requests — export const instance or getter.", m.index ?? 0);
       }
     }
   }
@@ -114,7 +114,7 @@ const runRulesOnFile = (filePath: string, source: string): Diagnostic[] => {
     if (!/let\s*\{[^}]*\}\s*=\s*\$props\(\)/.test(source.slice((m.index ?? 0) - 100, (m.index ?? 0) + 50))) {
       // Check not top-level destructuring
       if (/const\s+\w+\s*=\s*\$props/.test(source.slice((m.index ?? 0) - 50, (m.index ?? 0) + 50)) && !/let\s*\{/.test(source.slice((m.index ?? 0) - 50, (m.index ?? 0) + 50))) {
-        report("svelte-doctor/props-invalid-placement", "$props() must be `let { ... } = $props()` at top-level.", m.index ?? 0);
+        report("svelte-5-doctor/props-invalid-placement", "$props() must be `let { ... } = $props()` at top-level.", m.index ?? 0);
       }
     }
   }
@@ -122,12 +122,12 @@ const runRulesOnFile = (filePath: string, source: string): Diagnostic[] => {
     const hasPropsInFile = /\$props\(\)/.test(source);
     const nearbyHasProps = /\$props\(\)/.test(source.slice(Math.max(0, (m.index ?? 0) - 500), (m.index ?? 0) + 500));
     if (!hasPropsInFile || !nearbyHasProps) {
-      report("svelte-doctor/bindable-invalid-location", "$bindable() only inside $props() destructuring.", m.index ?? 0);
+      report("svelte-5-doctor/bindable-invalid-location", "$bindable() only inside $props() destructuring.", m.index ?? 0);
     }
   }
   for (const m of source.matchAll(/\$derived\s*\(/g)) {
     if (filePath.endsWith(".svelte.js") && /export\s+/.test(source.slice(Math.max(0, (m.index ?? 0) - 50), (m.index ?? 0)))) {
-      report("svelte-doctor/derived-invalid-export", "Exporting $derived from module is invalid.", m.index ?? 0);
+      report("svelte-5-doctor/derived-invalid-export", "Exporting $derived from module is invalid.", m.index ?? 0);
     }
   }
   // store rune conflict: $count vs rune
@@ -147,88 +147,88 @@ const runRulesOnFile = (filePath: string, source: string): Diagnostic[] => {
     if (new RegExp(`\\b${varName}\\s*\\+=|\\b${varName}\\s*=\\s*[^=]`).test(after) && !source.includes(`$state`) && !source.includes(`$props`)) {
       // Only report if used in template
       if (isSvelte && source.includes(`{${varName}}`)) {
-        report("svelte-doctor/non-reactive-update", `let ${varName} reassigned but not $state — template won't update.`, decl.index ?? 0, `let ${varName} = $state(...)`);
+        report("svelte-5-doctor/non-reactive-update", `let ${varName} reassigned but not $state — template won't update.`, decl.index ?? 0, `let ${varName} = $state(...)`);
       }
     }
   }
   // state_referenced_locally
   for (const m of source.matchAll(/setContext\s*\(\s*["'][^"']+["']\s*,\s*(\w+)\s*\)/g)) {
     const arg = m[1];
-    if (arg && source.includes(`$state`)) report("svelte-doctor/state-referenced-locally", `setContext('key', ${arg}) snapshots value — use () => ${arg} getter or createContext.`, m.index ?? 0);
+    if (arg && source.includes(`$state`)) report("svelte-5-doctor/state-referenced-locally", `setContext('key', ${arg}) snapshots value — use () => ${arg} getter or createContext.`, m.index ?? 0);
   }
   // snippet rest
   for (const m of source.matchAll(/\{#snippet\s+\w+\s*\([^)]*\.\.\./g))
-    report("svelte-doctor/snippet-invalid-rest", "Snippet with rest params is invalid.", m.index ?? 0);
+    report("svelte-5-doctor/snippet-invalid-rest", "Snippet with rest params is invalid.", m.index ?? 0);
 
   // ── Correctness: effects & derived ──
   for (const m of source.matchAll(/\$effect\s*\(\s*\(\)\s*=>\s*\{[^}]*\b\w+\s*=\s*[^}]*\}/g)) {
     const body = m[0];
     if (/\w+\s*=\s*\w+\s*\*\s*\w+|\w+\s*=\s*\w+\s*\+\s*\w+/.test(body) && !/fetch|setTimeout|addEventListener/.test(body)) {
-      report("svelte-doctor/no-effect-derived", "Deriving state inside $effect — use $derived instead.", m.index ?? 0, "let x = $derived(y * 2)");
+      report("svelte-5-doctor/no-effect-derived", "Deriving state inside $effect — use $derived instead.", m.index ?? 0, "let x = $derived(y * 2)");
     }
   }
   // effect cleanup
   for (const m of source.matchAll(/\$effect\s*\(\s*\(\)\s*=>\s*\{[^}]*\b(setInterval|setTimeout|addEventListener)\s*\(/g)) {
     const snippet = source.slice(m.index ?? 0, (m.index ?? 0) + 500);
     if (!/return\s*\(\)\s*=>/.test(snippet) && !/return\s*function/.test(snippet)) {
-      report("svelte-doctor/effect-needs-cleanup", `${m[1]} inside $effect without cleanup — return () => clear...`, m.index ?? 0);
+      report("svelte-5-doctor/effect-needs-cleanup", `${m[1]} inside $effect without cleanup — return () => clear...`, m.index ?? 0);
     }
   }
   for (const m of source.matchAll(/\$derived\s*\([^)]*\)\s*\{[^}]*\w+\s*\+=|\$derived\([^)]*=>[^)]*\{[^}]*\w+\+\+/g))
-    report("svelte-doctor/no-mutate-in-derived", "Mutating state inside $derived is forbidden.", m.index ?? 0);
+    report("svelte-5-doctor/no-mutate-in-derived", "Mutating state inside $derived is forbidden.", m.index ?? 0);
   // derived simple
   for (const m of source.matchAll(/\$derived\s*\(\s*\w+\s*\)/g))
-    report("svelte-doctor/no-derived-simple", "Useless $derived wrapping single variable — use directly.", m.index ?? 0);
+    report("svelte-5-doctor/no-derived-simple", "Useless $derived wrapping single variable — use directly.", m.index ?? 0);
 
   // ── Performance ──
   // unkeyed each
   for (const m of source.matchAll(/\{#each\s+[^\}]+ as [^\}]+}/g)) {
     const block = m[0];
-    if (!/\(.+\)/.test(block)) report("svelte-doctor/no-index-as-key", "{#each} without key — use `{#each items as item (item.id)}`", m.index ?? 0);
-    else if (/\(\s*\w+\s*\)/.test(block) && /,\s*i\s*\)/.test(block)) report("svelte-doctor/no-index-as-key", "{#each} using index as key is unstable.", m.index ?? 0);
+    if (!/\(.+\)/.test(block)) report("svelte-5-doctor/no-index-as-key", "{#each} without key — use `{#each items as item (item.id)}`", m.index ?? 0);
+    else if (/\(\s*\w+\s*\)/.test(block) && /,\s*i\s*\)/.test(block)) report("svelte-5-doctor/no-index-as-key", "{#each} using index as key is unstable.", m.index ?? 0);
   }
   // each item mutation
   for (const m of source.matchAll(/\{#each\s+(\w+)\s+as\s+(\w+)[^}]*\}[\s\S]*?bind:value=\{(\w+)\}/g)) {
     const item = m[2];
-    if (item === m[3]) report("svelte-doctor/each-item-mutation", `bind:value={${item}} mutates each item directly — use array[index].`, m.index ?? 0);
+    if (item === m[3]) report("svelte-5-doctor/each-item-mutation", `bind:value={${item}} mutates each item directly — use array[index].`, m.index ?? 0);
   }
   // large $state object
   for (const m of source.matchAll(/\$state\s*\(\s*\{[^}]{200,}\}/g))
-    report("svelte-doctor/perf-avoid-deep-proxy", "Large object with $state proxies deeply — consider $state.raw + reassignment.", m.index ?? 0);
+    report("svelte-5-doctor/perf-avoid-deep-proxy", "Large object with $state proxies deeply — consider $state.raw + reassignment.", m.index ?? 0);
   // inline class
   for (const m of source.matchAll(/\$effect\s*\([^)]*\)\s*=>\s*\{[^}]*new\s+class\b/g))
-    report("svelte-doctor/perf-avoid-inline-class", "new class inside $effect — hoist to module scope.", m.index ?? 0);
+    report("svelte-5-doctor/perf-avoid-inline-class", "new class inside $effect — hoist to module scope.", m.index ?? 0);
   // layout animation
   for (const m of source.matchAll(/transition:\w+[^}]*width|animate:[^;]*width|style:[^;]*width/g))
-    if (/width|height|top|left/.test(m[0])) report("svelte-doctor/no-layout-animation", "Animating layout properties causes thrash — use transform/opacity.", m.index ?? 0);
-  for (const m of source.matchAll(/transition:\s*all\b/g)) report("svelte-doctor/no-transition-all", "transition:all is expensive — specify property.", m.index ?? 0);
+    if (/width|height|top|left/.test(m[0])) report("svelte-5-doctor/no-layout-animation", "Animating layout properties causes thrash — use transform/opacity.", m.index ?? 0);
+  for (const m of source.matchAll(/transition:\s*all\b/g)) report("svelte-5-doctor/no-transition-all", "transition:all is expensive — specify property.", m.index ?? 0);
   for (const m of source.matchAll(/filter:\s*blur\(\s*(\d+)px\)/g)) {
     const r = Number.parseInt(m[1] ?? "0", 10);
-    if (r > 20) report("svelte-doctor/no-large-animated-blur", `Large blur(${r}px) animation is expensive — reduce radius.`, m.index ?? 0);
+    if (r > 20) report("svelte-5-doctor/no-large-animated-blur", `Large blur(${r}px) animation is expensive — reduce radius.`, m.index ?? 0);
   }
   // js perf
-  for (const m of source.matchAll(/\.filter\s*\([^)]+\)\s*\.map\s*\(/g)) report("svelte-doctor/js-combine-iterations", "filter().map() does 2 passes — use single loop or flatMap.", m.index ?? 0);
-  for (const m of source.matchAll(/for\s*\([^)]+\)\s*\{[^}]*new\s+RegExp\s*\(/g)) report("svelte-doctor/js-hoist-regexp", "RegExp inside loop — hoist.", m.index ?? 0);
-  for (const m of source.matchAll(/for\s*\([^)]+\)\s*\{[^}]*new\s+Intl\./g)) report("svelte-doctor/js-hoist-intl", "Intl.* inside loop — hoist.", m.index ?? 0);
+  for (const m of source.matchAll(/\.filter\s*\([^)]+\)\s*\.map\s*\(/g)) report("svelte-5-doctor/js-combine-iterations", "filter().map() does 2 passes — use single loop or flatMap.", m.index ?? 0);
+  for (const m of source.matchAll(/for\s*\([^)]+\)\s*\{[^}]*new\s+RegExp\s*\(/g)) report("svelte-5-doctor/js-hoist-regexp", "RegExp inside loop — hoist.", m.index ?? 0);
+  for (const m of source.matchAll(/for\s*\([^)]+\)\s*\{[^}]*new\s+Intl\./g)) report("svelte-5-doctor/js-hoist-intl", "Intl.* inside loop — hoist.", m.index ?? 0);
   for (const m of source.matchAll(/from\s+["'][^"']*\/index["']|import\s+\*\s+as\s+\w+\s+from\s+["']lodash["']/g))
-    report("svelte-doctor/no-barrel-import", "Barrel/lodash full import hurts tree-shaking — import specific path.", m.index ?? 0);
+    report("svelte-5-doctor/no-barrel-import", "Barrel/lodash full import hurts tree-shaking — import specific path.", m.index ?? 0);
 
   // ── Maintainability ──
   if (lines.length > GIANT_COMPONENT_THRESHOLD_LINES)
-    report("svelte-doctor/no-giant-component", `Component is ${lines.length} lines (threshold ${GIANT_COMPONENT_THRESHOLD_LINES}) — split via snippets/composition.`, 0);
+    report("svelte-5-doctor/no-giant-component", `Component is ${lines.length} lines (threshold ${GIANT_COMPONENT_THRESHOLD_LINES}) — split via snippets/composition.`, 0);
   // nested snippet: {#snippet} inside {#if} or {#each}
   for (const m of source.matchAll(/\{#if[\s\S]*?\{#snippet|\{#each[\s\S]*?\{#snippet/g))
-    report("svelte-doctor/no-nested-snippet", "Snippet defined inside markup recreates each render — hoist to top-level.", m.index ?? 0);
+    report("svelte-5-doctor/no-nested-snippet", "Snippet defined inside markup recreates each render — hoist to top-level.", m.index ?? 0);
 
   // ── a11y via compiler bridge: also rely on svelte compile warnings ──
   // simple heuristics:
-  for (const m of source.matchAll(/<img\b(?![^>]*\balt=)[^>]*>/gi)) report("svelte-doctor/a11y-missing-attribute", "<img> missing alt attribute.", m.index ?? 0);
-  for (const m of source.matchAll(/<a\b(?![^>]*\bhref=)[^>]*>/gi)) report("svelte-doctor/a11y-missing-attribute", "<a> missing href.", m.index ?? 0);
+  for (const m of source.matchAll(/<img\b(?![^>]*\balt=)[^>]*>/gi)) report("svelte-5-doctor/a11y-missing-attribute", "<img> missing alt attribute.", m.index ?? 0);
+  for (const m of source.matchAll(/<a\b(?![^>]*\bhref=)[^>]*>/gi)) report("svelte-5-doctor/a11y-missing-attribute", "<a> missing href.", m.index ?? 0);
   for (const m of source.matchAll(/onclick\s*=\s*\{[^}]+\}(?![^<]*onkeydown)/gi)) {
     // if clickable div without keyboard
     const tagMatch = source.slice(Math.max(0, (m.index ?? 0) - 100), m.index ?? 0).match(/<(\w+)\b[^>]*$/);
     const tag = tagMatch?.[1] ?? "";
-    if (tag === "div" || tag === "span") report("svelte-doctor/a11y-click-events-have-key-events", `<${tag}> with onclick missing keyboard handler.`, m.index ?? 0);
+    if (tag === "div" || tag === "span") report("svelte-5-doctor/a11y-click-events-have-key-events", `<${tag}> with onclick missing keyboard handler.`, m.index ?? 0);
   }
 
   return diags;
@@ -268,8 +268,8 @@ export const runInspect = async (input: InspectInput): Promise<JsonReport> => {
           // Map to our ruleIds when possible
           let ruleId = `svelte/compiler:${code}`;
           let category: Diagnostic["category"] = "Correctness";
-          if (isA11y) { ruleId = `svelte-doctor/${code.replaceAll("_", "-")}`; category = "Accessibility"; }
-          else if (isCss) { ruleId = "svelte-doctor/css-unused-selector"; category = "Maintainability"; }
+          if (isA11y) { ruleId = `svelte-5-doctor/${code.replaceAll("_", "-")}`; category = "Accessibility"; }
+          else if (isCss) { ruleId = "svelte-5-doctor/css-unused-selector"; category = "Maintainability"; }
           else if (code.includes("state") || code.includes("rune")) category = "Correctness";
           else if (code.includes("perf")) category = "Performance";
 
@@ -294,7 +294,7 @@ export const runInspect = async (input: InspectInput): Promise<JsonReport> => {
         // Compiler errors become diagnostics
         const lineMatch = msg.match(/:(\d+):(\d+)/);
           allDiagnostics.push({
-            ruleId: "svelte-doctor/compile-error",
+            ruleId: "svelte-5-doctor/compile-error",
             severity: "error",
             category: "Correctness",
             message: msg.split("\n")[0] ?? msg,

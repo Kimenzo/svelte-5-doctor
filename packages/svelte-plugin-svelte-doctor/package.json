@@ -1,7 +1,7 @@
 {
-  "name": "svelte-plugin-svelte-doctor",
+  "name": "svelte-plugin-svelte-5-doctor",
   "version": "0.1.0",
-  "description": "Svelte plugin for Svelte Doctor — 52 rules for Svelte 5 (port of oxlint-plugin-react-doctor's 287 rules).",
+  "description": "Svelte plugin for Svelte 5 Doctor — 48 rules for Svelte 5 (port of oxlint-plugin-react-doctor's 287 rules). Renamed for svelte-5-doctor publish.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -11,7 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@svelte-doctor/core": "workspace:*",
+    "svelte-5-doctor-core": "workspace:*",
     "svelte": "^5.35.0"
   },
   "devDependencies": {

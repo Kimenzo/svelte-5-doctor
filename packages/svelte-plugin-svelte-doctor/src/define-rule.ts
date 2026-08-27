@@ -3,7 +3,7 @@
  * Create single file src/plugin/rules/<bucket>/<id>.ts with defineRule({ id, category, create })
  * Then `pnpm gen` regenerates rule-registry.ts (see react-doctor docs)
  */
-import type { RuleMeta, RuleContext } from "@svelte-doctor/core";
+import type { RuleMeta, RuleContext } from "svelte-5-doctor-core";
 
 export interface DefineRuleOptions extends RuleMeta {
   create: (ctx: RuleContext) => void;

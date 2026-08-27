@@ -1,11 +1,11 @@
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="./assets/svelte-doctor-logo-dark.svg">
-  <source media="(prefers-color-scheme: light)" srcset="./assets/svelte-doctor-logo-light.svg">
-  <img alt="Svelte Doctor" src="./assets/svelte-doctor-logo-light.svg" width="140" height="36">
+  <source media="(prefers-color-scheme: dark)" srcset="./assets/svelte-5-doctor-logo-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="./assets/svelte-5-doctor-logo-light.svg">
+  <img alt="Svelte Doctor" src="./assets/svelte-5-doctor-logo-light.svg" width="140" height="36">
 </picture>
 
-[![version](https://img.shields.io/npm/v/svelte-doctor?style=flat&colorA=000000&colorB=000000)](https://npmjs.com/package/svelte-doctor)
-[![downloads](https://img.shields.io/npm/dt/svelte-doctor.svg?style=flat&colorA=000000&colorB=000000)](https://npmjs.com/package/svelte-doctor)
+[![version](https://img.shields.io/npm/v/svelte-5-doctor?style=flat&colorA=000000&colorB=000000)](https://npmjs.com/package/svelte-5-doctor)
+[![downloads](https://img.shields.io/npm/dt/svelte-5-doctor.svg?style=flat&colorA=000000&colorB=000000)](https://npmjs.com/package/svelte-5-doctor)
 [![license](https://img.shields.io/badge/license-Modified%20MIT-blue?style=flat&colorA=000000&colorB=000000)](#license)
 
 Your agent writes bad Svelte 5, this catches it.
@@ -16,38 +16,38 @@ Your agent writes bad Svelte 5, this catches it.
 
 Works across Svelte 5 + SvelteKit — Vite, SvelteKit 2, Astro Svelte, you name it.
 
-[Docs →](https://github.com/Kimenzo/svelte-doctor#readme) · [Rules →](#rules) · [CI →](#3-run-in-ci)
+[Docs →](https://github.com/Kimenzo/svelte-5-doctor#readme) · [Rules →](#rules) · [CI →](#3-run-in-ci)
 
 ## Install
 
 ### 1. Quick start
 
 ```bash
-npx svelte-doctor@latest .
+npx svelte-5-doctor@latest .
 # or via pnpm
-pnpm dlx svelte-doctor@latest .
+pnpm dlx svelte-5-doctor@latest .
 ```
 
 Verbose, diff-aware (like `react-doctor --verbose --diff`):
 
 ```bash
-npx -y svelte-doctor@latest . --verbose --scope changed --base main
+npx -y svelte-5-doctor@latest . --verbose --scope changed --base main
 ```
 
 JSON for agents (mirrors `react-doctor --json`):
 
 ```bash
-npx svelte-doctor --json --json-out ./report.json
-npx svelte-doctor --category Security --json
-npx svelte-doctor --score   # numeric only
+npx svelte-5-doctor --json --json-out ./report.json
+npx svelte-5-doctor --category Security --json
+npx svelte-5-doctor --score   # numeric only
 ```
 
 ### 2. Install for agents
 
 ```bash
-npx svelte-doctor@latest install
+npx svelte-5-doctor@latest install
 # or agent-specific
-npx svelte-doctor@latest install --agent claude --dry-run
+npx svelte-5-doctor@latest install --agent claude --dry-run
 ```
 
 Works with Claude Code, Cursor, Codex, OpenCode, Windsurf (same as `react-doctor install`).
@@ -57,14 +57,14 @@ Works with Claude Code, Cursor, Codex, OpenCode, Windsurf (same as `react-doctor
 Svelte Doctor reviews every PR and reports **only issues your change introduced**:
 
 ```bash
-npx svelte-doctor@latest ci install
-# interactive: detects GitHub Actions, writes .github/workflows/svelte-doctor.yml
+npx svelte-5-doctor@latest ci install
+# interactive: detects GitHub Actions, writes .github/workflows/svelte-5-doctor.yml
 ```
 
 Or use the GitHub Action directly (ported from `action.yml`):
 
 ```yaml
-uses: Kimenzo/svelte-doctor@v1
+uses: Kimenzo/svelte-5-doctor@v1
 with:
   scope: changed   # changed | files | full
   blocking: none   # none | warning | error
@@ -76,12 +76,12 @@ with:
 ### 4. Configure rules
 
 ```ts
-// svelte-doctor.config.ts — mirrors doctor.config.ts
+// svelte-5-doctor.config.ts — mirrors doctor.config.ts
 export default {
   rules: {
-    "svelte-doctor/no-at-html-xss": "error",
-    "svelte-doctor/legacy-export-let": "error",
-    "svelte-doctor/no-effect-derived": "warn",
+    "svelte-5-doctor/no-at-html-xss": "error",
+    "svelte-5-doctor/legacy-export-let": "error",
+    "svelte-5-doctor/no-effect-derived": "warn",
   },
   categories: { Performance: "warn" },
   ignore: ["src/legacy/**"],
@@ -101,9 +101,9 @@ export default {
 Full list:
 
 ```bash
-npx svelte-doctor rules list
-npx svelte-doctor rules list --category Security --json
-npx svelte-doctor rules explain svelte-doctor/no-at-html-xss
+npx svelte-5-doctor rules list
+npx svelte-5-doctor rules list --category Security --json
+npx svelte-5-doctor rules explain svelte-5-doctor/no-at-html-xss
 ```
 
 ## Svelte 5 coverage
@@ -129,12 +129,12 @@ Deterministic 0-100, same as React Doctor:
 ## Monorepo layout — mirrors React Doctor
 
 ```
-svelte-doctor/               # ← this repo
+svelte-5-doctor/               # ← this repo
 ├── packages/
-│   ├── core/               # @svelte-doctor/core — runInspect pipeline (svelte/compiler) — ported from @react-doctor/core
-│   ├── svelte-doctor/      # CLI (svelte-doctor) — ported from packages/react-doctor
-│   ├── svelte-plugin-svelte-doctor/  # 52 rules — ported from oxlint-plugin-react-doctor (287 rules)
-│   └── eslint-plugin-svelte-doctor/  # flat-config wrapper — ported from eslint-plugin-react-doctor
+│   ├── core/               # @svelte-5-doctor/core — runInspect pipeline (svelte/compiler) — ported from @react-doctor/core
+│   ├── svelte-5-doctor/      # CLI (svelte-5-doctor) — ported from packages/react-doctor
+│   ├── svelte-plugin-svelte-5-doctor/  # 52 rules — ported from oxlint-plugin-react-doctor (287 rules)
+│   └── eslint-plugin-svelte-5-doctor/  # flat-config wrapper — ported from eslint-plugin-react-doctor
 ├── examples/kitchen-sink/  # intentionally buggy Svelte 5 fixture (score: ~20)
 ├── docs/                   # HOW_TO_WRITE_A_RULE.md, svelte-5-porting-map.md
 └── action.yml              # GitHub Action v1 — ported from React Doctor action.yml

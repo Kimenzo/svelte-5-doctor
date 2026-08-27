@@ -1,20 +1,20 @@
 {
   "name": "svelte-doctor",
   "private": true,
-  "homepage": "https://github.com/Kimenzo/svelte-doctor#readme",
-  "description": "Svelte Doctor — 0-100 health check for Svelte 5 codebases. Ported from React Doctor.",
+  "homepage": "https://github.com/Kimenzo/svelte-5-doctor#readme",
+  "description": "Svelte 5 Doctor — 0-100 health check for Svelte 5 codebases. Ported from React Doctor. Renamed from svelte-doctor (taken).",
   "bugs": {
-    "url": "https://github.com/Kimenzo/svelte-doctor/issues"
+    "url": "https://github.com/Kimenzo/svelte-5-doctor/issues"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/Kimenzo/svelte-doctor.git"
+    "url": "https://github.com/Kimenzo/svelte-5-doctor.git"
   },
   "type": "module",
   "scripts": {
-    "dev": "turbo run dev --filter=svelte-doctor",
+    "dev": "turbo run dev --filter=svelte-5-doctor",
     "build": "turbo run build",
-    "test": "turbo run test --filter=svelte-doctor --filter=@svelte-doctor/core --filter=svelte-plugin-svelte-doctor --filter=eslint-plugin-svelte-doctor",
+    "test": "turbo run test --filter=svelte-5-doctor --filter=svelte-5-doctor-core --filter=svelte-plugin-svelte-5-doctor --filter=eslint-plugin-svelte-5-doctor",
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
     "format": "prettier --write .",

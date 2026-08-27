@@ -9,7 +9,7 @@
 | `oxlint` (Rust, near-instant) + `deslop-js` (Knip-like dead code) | `svelte/compiler` `compile()` + `parse()` + heuristic visitors |
 | `batchIncludePaths` + `spawnLintBatches` + `OXLINT_SPAWN_TIMEOUT_MS` | `tinyglobby` + sequential file loop (MVP; batch + worker parity roadmap) |
 | `createOxlintConfig()` temp oxlintrc.json | Direct rule loop in `run-inspect.ts` `runRulesOnFile()` |
-| `doctor.config.*` layered per-project | `svelte-doctor.config.ts` (roadmap) |
+| `doctor.config.*` layered per-project | `svelte-5-doctor.config.ts` (roadmap) |
 
 ## Rule Translation (287 → 52 first wave)
 

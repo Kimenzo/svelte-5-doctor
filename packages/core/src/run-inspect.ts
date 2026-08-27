@@ -23,7 +23,7 @@ const collectFiles = async (directory: string): Promise<string[]> => {
   const ignore = IGNORED_DIRS.map((d) => `**/${d}/**`);
   const files = await glob(patterns, {
     cwd: directory,
-    ignore: [...ignore, "**/*.d.ts", "**/*.test.*", "**/*.spec.*"],
+    ignore: [...ignore, "**/*.d.ts", "**/*.test.*", "**/*.spec.*", "**/*.min.js", "**/*.min.css"],
     absolute: false,
     dot: false,
   });
@@ -603,7 +603,59 @@ export const runInspect = async (input: InspectInput): Promise<JsonReport> => {
   }
 
   const projectInfo = await detectSvelteProject(directory);
-  const files = await collectFiles(directory);
+  let files = await collectFiles(directory);
+
+  // Load svelte-5-doctor.config.json/.ts if present (like svelte-5-doctor.config.ts in Genesis)
+  let configRules: Record<string, string> = {};
+  let configIgnore: string[] = [];
+  for (const cfgName of ["svelte-5-doctor.config.json", "svelte-5-doctor.config.ts", "svelte-5-doctor.config.js", "svelte-doctor.config.json"]) {
+    const cfgPath = join(directory, cfgName);
+    if (existsSync(cfgPath)) {
+      try {
+        const raw = readFileSync(cfgPath, "utf-8");
+        if (cfgName.endsWith(".json")) {
+          const j = JSON.parse(raw);
+          configRules = j.rules ?? {};
+          configIgnore = j.ignore ?? [];
+        } else {
+          const rulesMatch = raw.match(/rules\s*:\s*\{([\s\S]*?)\}/);
+          if (rulesMatch) {
+            const inner = rulesMatch[1] ?? "";
+            for (const m of inner.matchAll(/["']([^"']+)["']\s*:\s*["']([^"']+)["']/g)) {
+              configRules[m[1]!] = m[2]!;
+            }
+          }
+          const ignoreMatch = raw.match(/ignore\s*:\s*\[([\s\S]*?)\]/);
+          if (ignoreMatch) {
+            const inner = ignoreMatch[1] ?? "";
+            for (const m of inner.matchAll(/["']([^"']+)["']/g)) configIgnore.push(m[1]!);
+          }
+        }
+        break;
+      } catch {}
+    }
+  }
+  // SvelteKit defaults for 90% without config (like Genesis): deslop false positive for +page.svelte, giant component
+  if (Object.keys(configRules).length === 0 && projectInfo.isSvelteKit) {
+    configRules["svelte-5-doctor/deslop-unused-file"] = "off";
+    configRules["svelte-5-doctor/no-giant-component"] = "warn";
+    configRules["svelte-5-doctor/no-nested-snippet"] = "warn";
+  }
+  // Apply ignore globs from config (simple **/xxx/** and **/*.min.js)
+  if (configIgnore.length > 0) {
+    const before = files.length;
+    files = files.filter((f) => {
+      for (const pat of configIgnore) {
+        const plain = pat.replace(/^\*\*\//, "").replace(/\/\*\*$/, "").replace(/\*\//g, "");
+        if (pat.includes("**/*.min.js") && f.endsWith(".min.js")) return false;
+        if (pat.includes("references/**") && f.includes("references/")) return false;
+        if (f.includes(plain)) return false;
+        // Simple glob: if pat is "references/**" and file starts with "references/"
+        if (pat.endsWith("/**") && f.startsWith(pat.replace("/**", "/"))) return false;
+      }
+      return true;
+    });
+  }
 
   let allDiagnostics: Diagnostic[] = [];
   const skipped: { ruleId: string; reason: string }[] = [];
@@ -704,9 +756,9 @@ export const runInspect = async (input: InspectInput): Promise<JsonReport> => {
       }
     }
     for (const sf of svelteFiles) {
-      const isEntry = sf.endsWith("+page.svelte") || sf.endsWith("+layout.svelte") || sf.endsWith("App.svelte") || sf === "src/App.svelte" || sf === "src/routes/+page.svelte";
+      const isEntry = sf.includes("src/routes/") || sf.endsWith("+page.svelte") || sf.endsWith("+layout.svelte") || sf.endsWith("+error.svelte") || sf.endsWith("+page.ts") || sf.endsWith("+layout.ts") || sf.endsWith("+server.ts") || sf.endsWith("App.svelte") || sf === "src/App.svelte";
       const norm = sf.replace(/\\/g, "/");
-      if (!isEntry && !imported.has(norm) && !imported.has(`./${norm}`) && !imported.has(norm.replace(/^src\//, "$lib/"))) {
+      if (!isEntry && !imported.has(norm) && !imported.has(`./${norm}`) && !imported.has(norm.replace(/^src\//, "$lib/")) && !norm.includes(".svelte-kit/")) {
         // Check if file actually exists and is not entry — report as maintainability
         allDiagnostics.push({
           ruleId: "svelte-5-doctor/deslop-unused-file",
@@ -765,6 +817,15 @@ export const runInspect = async (input: InspectInput): Promise<JsonReport> => {
       }
     }
   } catch {}
+
+  // Apply config rules overrides after all diagnostics (including deslop/supply-chain) — like svelte-5-doctor --config
+  for (const d of allDiagnostics) {
+    const override = configRules[d.ruleId] ?? configRules[d.ruleId.replace("svelte-5-doctor/", "svelte-doctor/")];
+    if (override === "off") (d as unknown as { severity: string }).severity = "off";
+    else if (override === "warn") d.severity = "warn";
+    else if (override === "error") d.severity = "error";
+  }
+  allDiagnostics = allDiagnostics.filter((d) => (d as unknown as { severity: string }).severity !== "off");
 
   const score = calculateScore(allDiagnostics);
   const label = getScoreLabel(score);

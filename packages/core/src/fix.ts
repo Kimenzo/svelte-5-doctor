@@ -30,6 +30,9 @@ const FIXABLE = new Set<string>([
   "svelte-5-doctor/each-item-assignment",
   "svelte-5-doctor/each-item-mutation",
   "svelte-5-doctor/compile-error",
+  "svelte-5-doctor/no-at-html-xss",
+  "svelte-5-doctor/no-index-as-key",
+  "svelte-5-doctor/snapshot-required",
 ]);
 
 export const isFixable = (ruleId: string): boolean => FIXABLE.has(ruleId) || FIXABLE.has(ruleId.replace("svelte-5-doctor/", "svelte-doctor/"));
@@ -237,9 +240,48 @@ export const applyFixes = (filePath: string, source: string, diagnostics: Diagno
           const beforeEach = fixed;
           fixed = fixed.replace(new RegExp(`bind:value=\\{${item}\\}`, "g"), `bind:value={${arr}[i]}`);
           fixed = fixed.replace(new RegExp(`\\b${item}\\s*=\\s*`, "g"), `${arr}[i] = `);
-          // Also handle {@render} etc. not needed
           if (fixed !== beforeEach) applied++; else skipped++;
         } else skipped++;
+      } else if (d.ruleId.includes("no-at-html-xss")) {
+        const before2 = fixed;
+        if (!fixed.includes("DOMPurify") && !fixed.includes("dompurify")) {
+          if (fixed.includes("<script")) {
+            fixed = fixed.replace(/<script[^>]*>/, (m) => `${m}\n  import DOMPurify from 'isomorphic-dompurify';`);
+          }
+        }
+        fixed = fixed.replace(/\{@html\s+([^\}]+)\}/g, (m, expr) => {
+          if (expr.includes("DOMPurify.sanitize") || expr.includes("TrustedHTML")) return m;
+          return `{@html DOMPurify.sanitize(${expr.trim()})}`;
+        });
+        if (fixed !== before2) applied++; else skipped++;
+      } else if (d.ruleId.includes("no-index-as-key")) {
+        const before2 = fixed;
+        fixed = fixed.replace(/\{#each\s+(\w+)\s+as\s+(\w+)\s*\}/g, (m, arr, item) => {
+          if (m.includes("(")) return m;
+          return `{#each ${arr} as ${item} (${item}.id)}`;
+        });
+        fixed = fixed.replace(/\{#each\s+(\w+)\s+as\s+(\w+)\s*,\s*(\w+)\s*\}/g, (m, arr, item, idx) => {
+          if (m.includes("(")) return m;
+          return `{#each ${arr} as ${item}, ${idx} (${item}.id)}`;
+        });
+        if (fixed !== before2) applied++; else skipped++;
+      } else if (d.ruleId.includes("snapshot-required")) {
+        const before2 = fixed;
+        const varMatch = d.message.match(/'([^']+)'/);
+        const v = varMatch?.[1];
+        if (v) {
+          const orig = fixed;
+          fixed = fixed.replace(new RegExp(`structuredClone\\s*\\(\\s*${v}\\s*\\)`, "g"), `structuredClone($state.snapshot(${v}))`);
+          fixed = fixed.replace(new RegExp(`JSON\\.stringify\\s*\\(\\s*${v}\\s*\\)`, "g"), `JSON.stringify($state.snapshot(${v}))`);
+          fixed = fixed.replace(new RegExp(`postMessage\\s*\\(\\s*${v}\\s*\\)`, "g"), `postMessage($state.snapshot(${v}))`);
+          if (fixed === orig) {
+            // Fallback: wrap bare variable in external call context
+            fixed = fixed.replace(new RegExp(`\\b${v}\\b`, "g"), `$state.snapshot(${v})`);
+            // But that would over-replace, so revert if too many
+            if ((fixed.match(new RegExp(`\\$state\\.snapshot\\(${v}\\)`, "g")) || []).length > 3) fixed = orig;
+          }
+        }
+        if (fixed !== before2) applied++; else skipped++;
       } else if (d.fix) {
         // Generic: if diagnostic has fix string that is a direct replacement, try to apply
         // For now, skip generic to avoid incorrect edits

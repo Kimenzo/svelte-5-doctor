@@ -25,6 +25,6 @@ export const SCORE_BANDS = {
   NEEDS_WORK_THRESHOLD: 50,
 } as const;
 
-export const IGNORED_DIRS = ["node_modules", ".git", ".svelte-kit", "dist", "build", ".turbo", ".vercel", ".next", "tests", "__tests__", "benchmarking", ".changeset", "playgrounds"] as const;
+export const IGNORED_DIRS = ["node_modules", ".git", ".svelte-kit", "dist", "build", ".turbo", ".vercel", ".next", "tests", "__tests__", "benchmarking", ".changeset", "playgrounds", "references", ".obsidian"] as const;
 
 export const SCORE_FAIL_THRESHOLD = 75 as const;

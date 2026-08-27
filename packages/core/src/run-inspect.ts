@@ -36,7 +36,7 @@ const lineColFromIndex = (source: string, idx: number) => {
   return { line: lines.length, column: (lines.at(-1)?.length ?? 0) + 1 };
 };
 
-const runRulesOnFile = (filePath: string, source: string): Diagnostic[] => {
+const runRulesOnFile = (filePath: string, source: string, directory?: string): Diagnostic[] => {
   const diags: Diagnostic[] = [];
   const isSvelte = SVELTE_RE.test(filePath) || filePath.endsWith(".svelte");
   const isRunesFile = /\$state|\$derived|\$effect|\$props|\$bindable|\$inspect/.test(source);
@@ -372,13 +372,23 @@ const runRulesOnFile = (filePath: string, source: string): Diagnostic[] => {
       report("svelte-5-doctor/derived-writable-version-gate", `Derived '${v}' reassigned — needs svelte@5.25+ (check package.json svelte version)`, m.index ?? 0);
     }
   }
-  // experimental-async: await in template or $derived without flag
+  // experimental-async: await in $derived/template needs svelte.config.js experimental.async:true (Svelte 5.36+)
   if (/\bawait\b/.test(source) && (/\$derived.*await/.test(source) || /\{@await/.test(source) || /\{#await/.test(source))) {
-    const hasFlag = /experimental\s*:\s*\{\s*async\s*:\s*true/.test(source) || source.includes("experimental.async");
-    // check svelte.config.js would have flag, but we heuristic: if await in .svelte and no flag in source, report
+    let hasFlag = false;
+    if (directory) {
+      for (const cfg of ["svelte.config.js", "svelte.config.ts"]) {
+        try {
+          const cfgPath = join(directory, cfg);
+          if (existsSync(cfgPath)) {
+            const cfgSrc = readFileSync(cfgPath, "utf-8");
+            if (/experimental\s*:\s*\{\s*async\s*:\s*true/.test(cfgSrc)) { hasFlag = true; break; }
+          }
+        } catch {}
+      }
+    }
+    if (!hasFlag) hasFlag = /experimental\s*:\s*\{\s*async\s*:\s*true/.test(source);
     if (!hasFlag && isSvelte) {
       const idx = source.indexOf("await");
-      // only report if file has await in derived/template and not in .js with flag
       report("svelte-5-doctor/experimental-async", "await in $derived/template needs svelte.config.js compilerOptions.experimental.async:true", idx);
     }
   }
@@ -412,22 +422,31 @@ const runRulesOnFile = (filePath: string, source: string): Diagnostic[] => {
     const idx = source.search(re);
     if (idx !== -1) report("svelte-5-doctor/props-fallback-no-mutate", `Fallback prop '${fb}' mutated — fallback is not proxied, reassign or make $bindable`, idx);
   }
-  // bindable-mutation-without-bindable: prop mutated without $bindable
+  // bindable-mutation-without-bindable: prop mutated without $bindable — ignore default value in let {a = default} = $props()
   for (const pv of propsVars) {
     if (bindableVars.has(pv)) continue;
+    // Find props block to exclude default values inside let { ... } = $props()
+    const propsBlockMatch = source.match(/let\s*\{[^}]+\}\s*=\s*\$props\(\)/);
+    const propsBlockStart = propsBlockMatch?.index ?? -1;
+    const propsBlockEnd = propsBlockStart !== -1 ? propsBlockStart + (propsBlockMatch?.[0]?.length ?? 0) : -1;
     const re = new RegExp(`\\b${pv}\\s*\\.\\w+\\s*(=|\\+=|\\+\\+)|\\b${pv}\\s*=\\s*[^=]`);
     const m = re.exec(source);
     if (m) {
       const idx = m.index ?? source.indexOf(pv);
-      // ensure it's mutation not just read
+      // Skip if inside props destructuring default value
+      if (propsBlockStart !== -1 && idx >= propsBlockStart && idx < propsBlockEnd) continue;
       if (source.slice(idx, idx + 50).includes("=") || source.slice(idx, idx + 50).includes("++")) {
-        // check if it's inside $props area? crude: if file has $props and pv is prop, and mutation exists
         if (new RegExp(`\\b${pv}\\b.*=.*`).test(source)) {
-          // avoid false positive for let {pv} = $props() itself
           const afterProps = source.indexOf("$props()");
           const mutIdx = source.indexOf(pv, afterProps + 10);
-          if (mutIdx !== -1 && source.slice(mutIdx, mutIdx + 100).match(/\.|\+|=/)) {
-            report("svelte-5-doctor/bindable-mutation-without-bindable", `Prop '${pv}' mutated without $bindable — mark let {${pv}=$bindable()} or use callback prop`, idx);
+          if (mutIdx !== -1 && mutIdx !== idx && source.slice(mutIdx, mutIdx + 100).match(/\.|\+|=/)) {
+            report("svelte-5-doctor/bindable-mutation-without-bindable", `Prop '${pv}' mutated without $bindable — mark let {${pv}=$bindable()} or use callback prop`, mutIdx);
+            break;
+          }
+          // Also check for mutation after props block, not just first occurrence
+          const allMuts = [...source.matchAll(new RegExp(`\\b${pv}\\s*(?:\\.\\w+\\s*=|\\s*=\\s*[^=])`, "g"))].filter((mm) => (mm.index ?? 0) > propsBlockEnd);
+          if (allMuts.length > 0) {
+            report("svelte-5-doctor/bindable-mutation-without-bindable", `Prop '${pv}' mutated without $bindable — mark let {${pv}=$bindable()} or use callback prop`, allMuts[0]!.index ?? idx);
             break;
           }
         }
@@ -712,7 +731,7 @@ export const runInspect = async (input: InspectInput): Promise<JsonReport> => {
       }
     }
 
-    const heuristic = runRulesOnFile(rel, source);
+    const heuristic = runRulesOnFile(rel, source, directory);
     allDiagnostics.push(...heuristic);
   }
 

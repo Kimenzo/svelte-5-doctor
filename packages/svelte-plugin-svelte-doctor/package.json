@@ -1,0 +1,22 @@
+{
+  "name": "svelte-plugin-svelte-doctor",
+  "version": "0.1.0",
+  "description": "Svelte plugin for Svelte Doctor — 52 rules for Svelte 5 (port of oxlint-plugin-react-doctor's 287 rules).",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@svelte-doctor/core": "workspace:*",
+    "svelte": "^5.35.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  },
+  "keywords": ["svelte", "svelte5", "eslint", "oxlint", "linter"]
+}

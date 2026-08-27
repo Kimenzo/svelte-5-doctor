@@ -1,0 +1,39 @@
+{
+  "name": "svelte-doctor",
+  "private": true,
+  "homepage": "https://github.com/Kimenzo/svelte-doctor#readme",
+  "description": "Svelte Doctor — 0-100 health check for Svelte 5 codebases. Ported from React Doctor.",
+  "bugs": {
+    "url": "https://github.com/Kimenzo/svelte-doctor/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Kimenzo/svelte-doctor.git"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "turbo run dev --filter=svelte-doctor",
+    "build": "turbo run build",
+    "test": "turbo run test --filter=svelte-doctor --filter=@svelte-doctor/core --filter=svelte-plugin-svelte-doctor --filter=eslint-plugin-svelte-doctor",
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "turbo run typecheck && turbo run lint",
+    "changeset": "changeset",
+    "version": "changeset version",
+    "release": "pnpm build && changeset publish"
+  },
+  "devDependencies": {
+    "@changesets/changelog-github": "^0.7.0",
+    "@changesets/cli": "^2.31.0",
+    "prettier": "^3.6.2",
+    "turbo": "^2.9.7",
+    "typescript": "^5.9.2"
+  },
+  "engines": {
+    "node": ">=20.19.0",
+    "pnpm": ">=9"
+  },
+  "packageManager": "pnpm@9.12.3"
+}

@@ -1,0 +1,38 @@
+{
+  "name": "svelte-doctor",
+  "version": "0.1.0",
+  "description": "Svelte Doctor CLI — 0-100 health check for Svelte 5. Ported from React Doctor (millionco/react-doctor).",
+  "type": "module",
+  "bin": {
+    "svelte-doctor": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "tsx src/cli.ts --help",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@svelte-doctor/core": "workspace:*",
+    "commander": "^14.0.3",
+    "picocolors": "^1.1.1",
+    "tinyglobby": "^0.2.12"
+  },
+  "devDependencies": {
+    "svelte": "^5.35.0",
+    "tsx": "^4.22.4",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  },
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "keywords": ["svelte", "svelte5", "linter", "doctor", "security", "performance", "a11y"]
+}

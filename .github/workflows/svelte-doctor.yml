@@ -1,0 +1,33 @@
+name: Svelte Doctor
+on:
+  pull_request: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+
+jobs:
+  svelte-doctor:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      statuses: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install
+      - run: pnpm build
+      - uses: ./  # local action — same as Kimenzo/svelte-doctor@v1
+        with:
+          scope: changed
+          blocking: none
+          comment: true
+          review-comments: true
+          commit-status: true

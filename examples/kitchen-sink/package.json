@@ -1,0 +1,14 @@
+{
+  "name": "kitchen-sink",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "svelte": "^5.35.0"
+  },
+  "devDependencies": {
+    "svelte-doctor": "workspace:*"
+  },
+  "scripts": {
+    "check": "svelte-doctor . --verbose"
+  }
+}

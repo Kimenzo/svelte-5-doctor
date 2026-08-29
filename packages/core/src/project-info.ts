@@ -8,7 +8,9 @@ import type { ProjectInfo } from "./types.js";
 
 export const detectSvelteProject = async (directory: string): Promise<ProjectInfo> => {
   let svelteVersion = "unknown";
+  let svelteKitVersion = "unknown";
   let isSvelteKit = false;
+  let isSvelteKit3 = false;
   let hasTypeScript = false;
   let framework: ProjectInfo["framework"] = "unknown";
 
@@ -30,6 +32,15 @@ export const detectSvelteProject = async (directory: string): Promise<ProjectInf
       if (deps["@sveltejs/kit"]) {
         isSvelteKit = true;
         framework = "sveltekit";
+        const rawKit = String(deps["@sveltejs/kit"]).replace(/^[^\d]*/, "");
+        svelteKitVersion = rawKit || "unknown";
+        const kitMajor = Number.parseInt(rawKit.split(".")[0] ?? "0", 10);
+        if (!Number.isNaN(kitMajor) && kitMajor >= 3) isSvelteKit3 = true;
+        // Also handle next tags like 3.0.0-next.25 -> major 3
+        if (rawKit.includes("3.") || rawKit.includes("next")) {
+          const m = rawKit.match(/(\d+)\.(\d+)\.(\d+)/);
+          if (m && Number.parseInt(m[1] ?? "0", 10) >= 3) isSvelteKit3 = true;
+        }
       }
       if (deps.typescript || deps["svelte-check"]) hasTypeScript = true;
     } catch {}
@@ -51,5 +62,5 @@ export const detectSvelteProject = async (directory: string): Promise<ProjectInf
     if (configJs.includes("runes: false") || configJs.includes("runes:false")) runesMode = false;
   } catch {}
 
-  return { directory, svelteVersion, isSvelteKit, hasTypeScript, framework, runesMode };
+  return { directory, svelteVersion, svelteKitVersion, isSvelteKit, isSvelteKit3, hasTypeScript, framework, runesMode };
 };

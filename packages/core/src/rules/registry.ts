@@ -83,7 +83,6 @@ export const SVELTE_DOCTOR_RULES: RuleMeta[] = [
   { id: "svelte-5-doctor/rune-requires-parens", category: "Correctness", severity: "error", description: "Rune used without parentheses — rune_missing_parentheses", tags: ["correctness"], framework: "svelte5" },
   { id: "svelte-5-doctor/each-item-assignment", category: "Correctness", severity: "error", description: "Mutating each item directly — each_item_invalid_assignment, use array[i]", tags: ["correctness"], framework: "svelte5" },
   { id: "svelte-5-doctor/experimental-async", category: "Correctness", severity: "error", description: "await in $derived/template without experimental.async:true", tags: ["correctness"], framework: "svelte5" },
-  { id: "svelte-5-doctor/perf-avoid-inline-class", category: "Performance", severity: "warn", description: "Class declared inside component/effect — perf_avoid_inline_class, hoist", tags: ["performance"], framework: "svelte5" },
   { id: "svelte-5-doctor/attribute-sequence", category: "Correctness", severity: "error", description: "Comma sequence in attribute — attribute_invalid_sequence_expression", tags: ["correctness"], framework: "svelte5" },
   { id: "svelte-5-doctor/kit-remote-boundary-required", category: "Correctness", severity: "error", description: "await query() without <svelte:boundary> pending snippet — SSR crash", tags: ["correctness","sveltekit"], framework: "sveltekit" },
   { id: "svelte-5-doctor/kit-remote-run-removed", category: "Correctness", severity: "error", description: ".run() on remote query removed in 2.61 — use await query()", tags: ["correctness","sveltekit"], framework: "sveltekit" },
@@ -92,6 +91,20 @@ export const SVELTE_DOCTOR_RULES: RuleMeta[] = [
   { id: "svelte-5-doctor/kit-prefer-context-over-module-state", category: "Maintainability", severity: "warn", description: "Module-level $state in $lib vs createContext — SSR leak, prefer createContext", tags: ["maintainability","sveltekit"], framework: "sveltekit" },
   { id: "svelte-5-doctor/deslop-unused-file", category: "Maintainability", severity: "warn", description: "Svelte file never imported — dead code (port of deslop-js)", tags: ["maintainability","deslop"], framework: "svelte5" },
   { id: "svelte-5-doctor/supply-chain-outdated-svelte", category: "Security", severity: "warn", description: "Outdated svelte <5.56.10 — supply-chain risk, update", tags: ["security","supply-chain"], framework: "svelte5" },
+
+  // ── 0.5.0 Brutally Needed (12) — SvelteKit 2/3 aware, no bloat ──
+  { id: "svelte-5-doctor/rune-outside-svelte", category: "Correctness", severity: "error", description: "Rune ($state/$derived/$effect/$props/$bindable) outside .svelte/.svelte.js/.svelte.ts — silent no-op, rename file", tags: ["correctness","rune"], framework: "svelte5" },
+  { id: "svelte-5-doctor/state-proxy-equality-mismatch", category: "Correctness", severity: "error", description: "Comparing proxy (from $state) with raw object via === always false — use $state.snapshot", tags: ["correctness"], framework: "svelte5" },
+  { id: "svelte-5-doctor/await-waterfall", category: "Performance", severity: "warn", description: "Sequential await where Promise.all would halve latency — Svelte 5.55+ runtime warning await_waterfall", tags: ["performance"], framework: "svelte5" },
+  { id: "svelte-5-doctor/assignment-value-stale", category: "Correctness", severity: "error", description: "(arr ??= []).push(arr.length) discards push — split to arr ??= []; arr.push(...)", tags: ["correctness"], framework: "svelte5" },
+  { id: "svelte-5-doctor/console-log-state", category: "Correctness", severity: "warn", description: "console.log of $state proxy logs Proxy{} not value — use $state.snapshot or $inspect", tags: ["correctness","dx"], framework: "svelte5" },
+  { id: "svelte-5-doctor/derived-inert", category: "Correctness", severity: "error", description: "$derived inside $effect becomes inert after teardown — hoist derived outside effect", tags: ["correctness"], framework: "svelte5" },
+  { id: "svelte-5-doctor/each-key-volatile", category: "Correctness", severity: "error", description: "Each key is new array/object literal each tick — volatile, thrashes DOM. Use stable string/number", tags: ["correctness","performance"], framework: "svelte5" },
+  { id: "svelte-5-doctor/module-shared-state-ssr-leak", category: "Security", severity: "error", description: "Top-level $state in src/lib/*.svelte.ts leaks across SSR requests — use createContext or $lib/server", tags: ["security","ssr"], framework: "svelte5" },
+  { id: "svelte-5-doctor/store-subscription-outside-svelte", category: "Correctness", severity: "error", description: "$store subscription only works inside .svelte — use get(store) in .svelte.ts", tags: ["correctness"], framework: "svelte5" },
+  { id: "svelte-5-doctor/hydration-risk", category: "Correctness", severity: "warn", description: "Invalid HTML that browser repairs (<p><div>, table without tbody) causes hydration_mismatch", tags: ["correctness","ssr"], framework: "svelte5" },
+  { id: "svelte-5-doctor/remote-await-boundary", category: "Correctness", severity: "error", description: "await query() outside <svelte:boundary pending> renders pending on server (remoteFunctions)", tags: ["correctness","sveltekit"], framework: "sveltekit" },
+  { id: "svelte-5-doctor/props-id-placement", category: "Correctness", severity: "error", description: "$props.id() only at top-level variable initializer — inside if/effect causes hydration mismatch", tags: ["correctness"], framework: "svelte5" },
 ];
 
 export const RULE_IDS = new Set(SVELTE_DOCTOR_RULES.map((r) => r.id));

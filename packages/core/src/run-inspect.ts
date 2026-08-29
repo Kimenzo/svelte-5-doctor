@@ -393,6 +393,51 @@ const runRulesOnFile = (filePath: string, source: string, directory?: string): D
     }
   }
 
+  // ── 0.5.0 P0: rune-outside-svelte, proxy-equality, await-waterfall (SvelteKit 2/3 aware) ──
+  // rune-outside-svelte: rune in .js/.ts not in .svelte family — version-aware: only report if not in .svelte.* and not in node_modules/.svelte-kit
+  if (!isSvelte && !filePath.endsWith(".svelte.js") && !filePath.endsWith(".svelte.ts") && !filePath.includes("node_modules") && !filePath.includes(".svelte-kit")) {
+    const runeMatch = source.match(/\$(state|derived|effect|props|bindable|inspect)\s*\(/);
+    if (runeMatch) {
+      const idx = source.indexOf(runeMatch[0]);
+      // SvelteKit 2 vs 3: both use same rune files, so no version gate needed for this rule — just file extension
+      report("svelte-5-doctor/rune-outside-svelte", `Rune ${runeMatch[0].trim()} outside .svelte/.svelte.js/.svelte.ts — rename file to .svelte.js/.svelte.ts or move to .svelte`, idx);
+    }
+  }
+  // state-proxy-equality-mismatch: proxy === raw always false
+  for (const sv of stateVars) {
+    const reEq = new RegExp(`\\b${sv}\\s*===?\\s*\\w+|\\w+\\s*===?\\s*\\b${sv}\\b`, "g");
+    for (const m of source.matchAll(reEq)) {
+      const snippet = m[0];
+      // Skip if both sides are state vars or both are snapshots
+      const isSnapshot = snippet.includes("$state.snapshot");
+      if (!isSnapshot) {
+        report("svelte-5-doctor/state-proxy-equality-mismatch", `Comparing proxy '${sv}' with raw object via === always false — use $state.snapshot(${sv})`, m.index ?? 0);
+        break;
+      }
+    }
+  }
+  // await-waterfall: sequential await where Promise.all would halve latency — Svelte 5.55+ runtime warning
+  // Only flag if two awaits are independent (not dependent) and in same $derived/$effect or top-level
+  const awaitBlocks = [...source.matchAll(/await\s+\w+/g)];
+  if (awaitBlocks.length >= 2) {
+    let hasWaterfall = false;
+    for (let i = 0; i < awaitBlocks.length - 1; i++) {
+      const a1 = awaitBlocks[i]!;
+      const a2 = awaitBlocks[i + 1]!;
+      const between = source.slice((a1.index ?? 0) + a1[0].length, a2.index ?? 0);
+      // If between contains no data dependency (no variable from first await used in second), and both in same function/derived
+      if (!between.includes("=") && between.length < 200) {
+        // Check if both awaits are in same $derived or top-level, not dependent
+        const beforeFirst = source.slice(Math.max(0, (a1.index ?? 0) - 500), a1.index ?? 0);
+        if (/\$derived|\$effect/.test(beforeFirst) || !/await.*await/.test(between)) {
+          hasWaterfall = true;
+          break;
+        }
+      }
+    }
+    if (hasWaterfall) report("svelte-5-doctor/await-waterfall", "Sequential await where Promise.all would halve latency — Svelte 5.55+ await_waterfall", (awaitBlocks[1]?.index ?? 0));
+  }
+
   // ── Props/Bindable/Raw/Snapshot ──
   // state-destructure-loss: let {a}= stateVar
   for (const m of source.matchAll(/\b(?:let|const)\s*\{\s*([^}]+)\}\s*=\s*(\w+)\s*[;\n]/g)) {
@@ -482,6 +527,84 @@ const runRulesOnFile = (filePath: string, source: string, directory?: string): D
     if (/Object\.keys|JSON\.stringify|\{\s*\.\.\.\s*\w+/.test(source) && !/toJSON\s*\(/.test(source)) {
       const idx = source.search(/class\s+\w+/);
       report("svelte-5-doctor/class-state-private-enumerability", "Class with $state fields used with Object.keys/JSON/spread but no toJSON — private fields hidden", idx);
+    }
+  }
+  // P1: assignment-value-stale: (arr ??= []).push(arr.length) discards push
+  for (const m of source.matchAll(/\(\s*\w+\s*\?\?=.*?\)\s*\.push\s*\(/g)) {
+    report("svelte-5-doctor/assignment-value-stale", "Assignment value stale: (arr ??= []).push() discards push — split to arr ??= []; arr.push(...)", m.index ?? 0);
+  }
+  // P1: console-log-state: console.log(proxy) logs Proxy not value
+  for (const m of source.matchAll(/console\.\w+\s*\(\s*(\w+)\s*\)/g)) {
+    const arg = m[1]!;
+    if (stateVars.has(arg) && !source.slice((m.index ?? 0) - 100, (m.index ?? 0)).includes("$state.snapshot") && !source.slice((m.index ?? 0), (m.index ?? 0) + 100).includes("$state.snapshot")) {
+      report("svelte-5-doctor/console-log-state", `console.log of $state proxy '${arg}' logs Proxy{} — use $state.snapshot(${arg}) or $inspect(${arg})`, m.index ?? 0, `$state.snapshot(${arg})`);
+    }
+  }
+  // P1: derived-inert: $derived inside $effect
+  for (const m of source.matchAll(/\$effect\s*\(\s*\(\)\s*=>\s*\{[^}]*\$derived\s*\(/g)) {
+    report("svelte-5-doctor/derived-inert", "$derived inside $effect becomes inert after teardown — hoist derived outside effect", m.index ?? 0);
+  }
+  // P1: each-key-volatile: each key is new array/object literal
+  for (const m of source.matchAll(/\{#each\s+[^}]+\s+\(\s*\[.*\]\s*\)/g)) {
+    report("svelte-5-doctor/each-key-volatile", "Each key is new array literal each tick — volatile, thrashes DOM. Use stable string/number", m.index ?? 0);
+  }
+  for (const m of source.matchAll(/\{#each\s+[^}]+\s+\(\s*\{.*\}\s*\)/g)) {
+    report("svelte-5-doctor/each-key-volatile", "Each key is new object literal each tick — volatile", m.index ?? 0);
+  }
+  // P2: module-shared-state-ssr-leak: top-level $state in src/lib/*.svelte.ts (not $lib/server) — SvelteKit 2/3 agnostic, check $lib/server allowlist
+  if ((filePath.includes("src/lib/") || filePath.startsWith("lib/")) && (filePath.endsWith(".svelte.ts") || filePath.endsWith(".svelte.js")) && !filePath.includes("$lib/server") && !filePath.includes("lib/server") && /\bexport\s+(const|let)\s+\w+\s*=\s*\$state/.test(source) && !/createContext/.test(source)) {
+    const idx = source.search(/\bexport\s+(const|let)\s+\w+\s*=\s*\$state/);
+    report("svelte-5-doctor/module-shared-state-ssr-leak", "Top-level $state in src/lib/*.svelte.ts leaks across SSR requests — use createContext or $lib/server", idx);
+  }
+  // P2: store-subscription-outside-svelte: $store in .svelte.ts/.svelte.js
+  if ((filePath.endsWith(".svelte.ts") || filePath.endsWith(".svelte.js") || filePath.endsWith(".ts") || filePath.endsWith(".js")) && !filePath.endsWith(".svelte") && /\$[a-zA-Z_]\w*\b/.test(source) && /from\s+['"]svelte\/store['"]/.test(source)) {
+    for (const m of source.matchAll(/\$([a-zA-Z_]\w*)\b/g)) {
+      const name = m[1]!;
+      if (["state","derived","effect","props","bindable","inspect","host"].includes(name)) continue;
+      // Check if it's a store subscription (has writable store import)
+      if (new RegExp(`\\b${name}\\b`).test(source)) {
+        report("svelte-5-doctor/store-subscription-outside-svelte", `$store subscription '$${name}' only works inside .svelte — use get(${name}) in .svelte.ts`, m.index ?? 0);
+        break;
+      }
+    }
+  }
+  // P2: hydration-risk: invalid HTML that browser repairs
+  if (/<p>\s*<div|\<table\>\s*<tr>|\<tr\>\s*<td>.*<\/tr>\s*<\/table>|<option>.*<div/.test(source)) {
+    const idx = source.search(/<p>\s*<div|<table>\s*<tr>|<option>.*<div/);
+    report("svelte-5-doctor/hydration-risk", "Invalid HTML that browser repairs causes hydration_mismatch — fix nesting", idx !== -1 ? idx : 0);
+  }
+  // P2: remote-await-boundary: await query() outside <svelte:boundary> — SvelteKit 2.68+/3 with remoteFunctions
+  // Version-aware: only report if file is in SvelteKit and uses query/remote, and no boundary
+  if (/await\s+\w*query|\.remote\.ts|from\s+['"].*\/remote['"]/.test(source) && /await/.test(source) && !/<svelte:boundary/.test(source)) {
+    // Check if project is SvelteKit with remoteFunctions (via directory svelte.config.js)
+    let isRemoteEnabled = false;
+    if (directory) {
+      try {
+        for (const cfg of ["svelte.config.js", "svelte.config.ts"]) {
+          const cfgPath = join(directory, cfg);
+          if (existsSync(cfgPath)) {
+            const cfgSrc = readFileSync(cfgPath, "utf-8");
+            if (/remoteFunctions\s*:\s*true/.test(cfgSrc) || /experimental\s*:\s*\{\s*async/.test(cfgSrc)) { isRemoteEnabled = true; break; }
+          }
+        }
+      } catch {}
+    }
+    // For SvelteKit 3, remoteFunctions is stable, so always check if file uses query
+    if (isRemoteEnabled || /query/.test(source)) {
+      const idx = source.search(/await\s+\w*query|await\s+.*\.remote/);
+      if (idx !== -1) report("svelte-5-doctor/remote-await-boundary", "await query() outside <svelte:boundary pending> renders pending on server (remoteFunctions) — wrap in <svelte:boundary>", idx);
+    }
+  }
+  // P2: props-id-placement: $props.id() only top-level
+  for (const m of source.matchAll(/\$props\.id\(\)/g)) {
+    const before = source.slice(0, m.index ?? 0);
+    const lastLet = before.lastIndexOf("let ");
+    const lastConst = before.lastIndexOf("const ");
+    const lastTopLevel = Math.max(before.lastIndexOf("\nlet "), before.lastIndexOf("\nconst "), 0);
+    // Check if inside if/effect/function
+    const snippetBefore = before.slice(-300);
+    if (/\bif\s*\(|\$effect|function\s+\w*\s*\(/.test(snippetBefore)) {
+      report("svelte-5-doctor/props-id-placement", "$props.id() only at top-level variable initializer — inside if/effect causes hydration mismatch", m.index ?? 0);
     }
   }
   // props-invalid: additional checks for nested/computed props

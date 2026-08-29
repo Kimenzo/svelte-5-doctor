@@ -3,7 +3,9 @@ import type { Diagnostic, JsonReport } from "./schemas.js";
 export interface ProjectInfo {
   directory: string;
   svelteVersion: string;
+  svelteKitVersion: string;
   isSvelteKit: boolean;
+  isSvelteKit3: boolean;
   hasTypeScript: boolean;
   framework: "svelte5" | "sveltekit" | "svelte4" | "unknown";
   runesMode: boolean;

@@ -23,6 +23,11 @@ const FIXABLE = new Set<string>([
   "svelte-5-doctor/rune-requires-parens",
   "svelte-5-doctor/css-unused-selector",
   "svelte-5-doctor/a11y-missing-attribute",
+  "svelte-5-doctor/a11y-label-has-associated-control",
+  "svelte-5-doctor/a11y-interactive-supports-focus",
+  "svelte-5-doctor/a11y-consider-explicit-label",
+  "svelte-5-doctor/iframe-missing-sandbox",
+  "svelte-5-doctor/svelte-component-deprecated",
   "svelte-5-doctor/props-invalid-placement",
   "svelte-5-doctor/bindable-invalid-location",
   "svelte-5-doctor/store-rune-conflict",
@@ -184,7 +189,8 @@ export const applyFixes = (filePath: string, source: string, diagnostics: Diagno
         }
       } else if (d.ruleId.includes("rune-requires-parens")) {
         // $state -> $state() etc., but NOT for $state<Type> generic (Svelte 5.56.10) — check for < after
-        fixed = fixed.replace(/\$(state|derived|effect|props|bindable|inspect)(?!\s*[\(.<])/g, (m, name) => `$${name}()`);
+        // \b word boundary prevents matching inside identifiers like $effectiveMode
+        fixed = fixed.replace(/\$(state|derived|effect|props|bindable|inspect)\b(?!\s*[\(.<])/g, (m, name) => `$${name}()`);
         if (fixed !== before) applied++; else skipped++;
       } else if (d.ruleId.includes("css-unused-selector")) {
         // Remove unused selector block: find line with selector and remove next block
@@ -208,6 +214,73 @@ export const applyFixes = (filePath: string, source: string, diagnostics: Diagno
             applied++;
           }
         }
+      } else if (d.ruleId.includes("a11y-label-has-associated-control")) {
+        // Add for attribute to label pointing to input id, or wrap input in label
+        const lines = fixed.split("\n");
+        const idx = d.line - 1;
+        const labelLine = lines[idx] ?? "";
+        // Match <label with or without closing > on same line
+        if (/<label\b/i.test(labelLine) && !/\bfor\s*=/.test(labelLine)) {
+          // Find next input/select/textarea and grab its id
+          let inputId = "";
+          for (let j = idx + 1; j < Math.min(idx + 15, lines.length); j++) {
+            const inputMatch = lines[j]?.match(/<(?:input|select|textarea)\b[^>]*?\bid=["']([^"']+)["']/i);
+            if (inputMatch) { inputId = inputMatch[1]; break; }
+          }
+          if (inputId) {
+            lines[idx] = labelLine.replace(/<label\b/, `<label for="${inputId}"`);
+            fixed = lines.join("\n");
+            applied++;
+          } else skipped++;
+        } else skipped++;
+      } else if (d.ruleId.includes("a11y-interactive-supports-focus")) {
+        // Add tabindex={0} to element with role that needs focus — handle multi-line elements
+        const lines = fixed.split("\n");
+        const idx = d.line - 1;
+        const line = lines[idx] ?? "";
+        if (line && !/tabindex/.test(line)) {
+          if (/\/>\s*$/.test(line.trimEnd()) || /[^\/]\/>\s*$/.test(line.trimEnd())) {
+            // Self-closing: insert before />
+            lines[idx] = line.replace(/\/>\s*$/, ' tabindex={0} />' );
+          } else if (/\/?>\s*$/.test(line.trimEnd())) {
+            // Closing >: insert before >
+            lines[idx] = line.replace(/(\S)\s*(\/?>)\s*$/, '$1 tabindex={0} $2');
+          } else {
+            // No > on this line: append tabindex on next line
+            lines.splice(idx + 1, 0, "    tabindex={0}");
+          }
+          if (lines.join("\n") !== fixed) { fixed = lines.join("\n"); applied++; }
+          else skipped++;
+        } else skipped++;
+      } else if (d.ruleId.includes("a11y-consider-explicit-label")) {
+        // Add aria-label to button/link without text content — handle multi-line
+        const lines = fixed.split("\n");
+        const idx = d.line - 1;
+        const line = lines[idx] ?? "";
+        if (line && !/aria-label/.test(line)) {
+          const tagMatch = line.match(/<(button|a)\b/i);
+          const tag = tagMatch?.[1] ?? "element";
+          if (/\/?>\s*$/.test(line.trimEnd())) {
+            // Closing >: insert before >
+            lines[idx] = line.replace(/(\S)\s*(\/?>)\s*$/, `$1 aria-label="${tag}" $2`);
+          } else {
+            // No > on this line: append on next line
+            lines.splice(idx + 1, 0, `    aria-label="${tag}"`);
+          }
+          if (lines.join("\n") !== fixed) { fixed = lines.join("\n"); applied++; }
+          else skipped++;
+        } else skipped++;
+      } else if (d.ruleId.includes("iframe-missing-sandbox")) {
+        // Add sandbox attribute to iframe
+        fixed = fixed.replace(/<iframe\b(?![^>]*\bsandbox\b)([^>]*?)>/gi, (m, attrs) => {
+          return `<iframe sandbox="allow-scripts"${attrs}>`;
+        });
+        if (fixed !== before) applied++; else skipped++;
+      } else if (d.ruleId.includes("svelte-component-deprecated") || d.ruleId.includes("svelte_component_deprecated")) {
+        // <svelte:component this={Foo} /> -> <Foo />
+        fixed = fixed.replace(/<svelte:component\s+this=\{([^}]+)\}\s*\/?>/g, (m, expr) => `<${expr} />`);
+        fixed = fixed.replace(/<svelte:component\s+this=\{([^}]+)\}>([\s\S]*?)<\/svelte:component>/g, (m, expr, children) => `<${expr}>${children}</${expr}>`);
+        if (fixed !== before) applied++; else skipped++;
       } else if (d.ruleId.includes("a11y-missing-attribute")) {
         if (d.message.includes("<img>")) {
           fixed = fixed.replace(/<img\b([^>]*?)>/gi, (m, attrs) => {
@@ -256,16 +329,9 @@ export const applyFixes = (filePath: string, source: string, diagnostics: Diagno
         });
         if (fixed !== before2) applied++; else skipped++;
       } else if (d.ruleId.includes("no-index-as-key")) {
-        const before2 = fixed;
-        fixed = fixed.replace(/\{#each\s+(\w+)\s+as\s+(\w+)\s*\}/g, (m, arr, item) => {
-          if (m.includes("(")) return m;
-          return `{#each ${arr} as ${item} (${item}.id)}`;
-        });
-        fixed = fixed.replace(/\{#each\s+(\w+)\s+as\s+(\w+)\s*,\s*(\w+)\s*\}/g, (m, arr, item, idx) => {
-          if (m.includes("(")) return m;
-          return `{#each ${arr} as ${item}, ${idx} (${item}.id)}`;
-        });
-        if (fixed !== before2) applied++; else skipped++;
+        // no-index-as-key: do NOT auto-add (item.id) — arrays may contain primitives
+        // or objects without an id property. The diagnostic message already suggests a key.
+        skipped++;
       } else if (d.ruleId.includes("snapshot-required")) {
         const before2 = fixed;
         const varMatch = d.message.match(/'([^']+)'/);

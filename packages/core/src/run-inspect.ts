@@ -212,7 +212,14 @@ const runRulesOnFile = (filePath: string, source: string, directory?: string): D
   if (isRunesFile || isSvelte) {
     for (const m of source.matchAll(/\bexport\s+let\s+\w+/g)) {
       if (isRunesFile || source.includes("$props") || source.includes("$state")) {
-        report("svelte-5-doctor/legacy-export-let", "`export let` is invalid in runes mode — use `let { prop } = $props()`", m.index ?? 0, "let { prop } = $props()");
+        // Svelte 5.57.0 (#18692): export let x = $derived(...) gets derived_invalid_export
+        const afterExport = source.slice((m.index ?? 0), (m.index ?? 0) + 200);
+        const isDerivedExport = /\$derived\s*\(/.test(afterExport.split(";" )[0] ?? "");
+        if (isDerivedExport) {
+          report("svelte-5-doctor/derived-invalid-export", "`export let x = $derived(...)` is invalid in runes mode — hoist derived to top-level `let x = $derived(...)` (not exported)", m.index ?? 0, `let ${m[0].replace(/export\s+let\s+/, "")} = $derived(...)`);
+        } else {
+          report("svelte-5-doctor/legacy-export-let", "`export let` is invalid in runes mode — use `let { prop } = $props()`", m.index ?? 0, "let { prop } = $props()");
+        }
       }
     }
     for (const m of sourceNoComments.matchAll(/\$\s*:\s*\w+/g)) {
@@ -260,7 +267,8 @@ const runRulesOnFile = (filePath: string, source: string, directory?: string): D
     }
   }
   // rune missing parens: $state without () — handle generics $state<Type>(val) as valid (Svelte 5.56.10) — check for <...>( pattern
-  for (const m of sourceNoComments.matchAll(/\$(state|derived|effect|props|bindable|inspect)(?!\s*[\(.<])/g)) {
+  // \b word boundary prevents matching inside identifiers like $effectiveMode
+  for (const m of sourceNoComments.matchAll(/\$(state|derived|effect|props|bindable|inspect)\b(?!\s*[\(.<])/g)) {
     const full = m[0];
     if (/\$(state|effect)\.(snapshot|eager|raw|pending|tracking|root)/.test(full)) continue;
     if (full === "$props" || full === "$host") continue;
@@ -783,6 +791,24 @@ const runRulesOnFile = (filePath: string, source: string, directory?: string): D
     if (tag === "div" || tag === "span") report("svelte-5-doctor/a11y-click-events-have-key-events", `<${tag}> with onclick missing keyboard handler.`, m.index ?? 0);
   }
 
+  // ── Svelte 5.57.0+: undeclared shorthand event handlers on special elements (#18480) ──
+  // Svelte 5.57.0 warns on <svelte:window onclick={handler}> when handler is not declared in script.
+  // Detect shorthand (no =) event attributes on svelte:window/document/body.
+  for (const m of source.matchAll(/<svelte:(window|document|body)\b([^>]*)>/gi)) {
+    const tag = m[1] ?? "";
+    const attrs = m[2] ?? "";
+    const eventShorthands = [...attrs.matchAll(/\bon(\w+)\b(?!=)/g)];
+    for (const ev of eventShorthands) {
+      const handler = ev[0] ?? "";
+      // Check if the handler is declared in the script
+      const handlerName = handler.replace(/^on/, "");
+      const handlerRegex = new RegExp(`\\b${handlerName}\\b`);
+      if (!handlerRegex.test(source.slice(0, m.index ?? 0))) {
+        report("svelte-5-doctor/special-element-undeclared-handler", `<svelte:${tag}> has shorthand event handler ${handler} but it is not declared in <script> — Svelte 5.57.0+ will warn`, m.index ?? 0);
+      }
+    }
+  }
+
   return diags;
 };
 
@@ -877,6 +903,13 @@ export const runInspect = async (input: InspectInput): Promise<JsonReport> => {
           const line = (w as unknown as { start?: { line: number; column: number } }).start?.line ?? 1;
           const col = (w as unknown as { start?: { line: number; column: number } }).start?.column ?? 1;
           const msg = (w as unknown as { message: string }).message ?? String(w);
+          // Add fix hint for fixable a11y/compiler rules
+          let fix: string | undefined;
+          if (code === "a11y_label_has_associated_control") fix = "Add for attribute to label or wrap input in label";
+          else if (code === "a11y_interactive_supports_focus") fix = "Add tabindex={0} to interactive element";
+          else if (code === "a11y_consider_explicit_label") fix = "Add aria-label to button or link";
+          else if (code === "a11y_missing_attribute") fix = "Add missing required attribute";
+          else if (code === "a11y_autofocus") fix = "Remove autofocus or add aria-live for dynamic content";
           allDiagnostics.push({
             ruleId,
             severity: "warn",
@@ -886,6 +919,7 @@ export const runInspect = async (input: InspectInput): Promise<JsonReport> => {
             line,
             column: col,
             tags: [code],
+            fix,
           });
         }
       } catch (err: unknown) {
@@ -975,13 +1009,13 @@ export const runInspect = async (input: InspectInput): Promise<JsonReport> => {
       const major = Number.parseInt(svelteVer.split(".")[0] ?? "0", 10);
       const minor = Number.parseInt(svelteVer.split(".")[1] ?? "0", 10);
       const patch = Number.parseInt(svelteVer.split(".")[2] ?? "0", 10);
-      // Outdated check: <5.56.10
-      if (svelteVer && (major < 5 || (major === 5 && (minor < 56 || (minor === 56 && patch < 10))))) {
+      // Outdated check: <5.57.0 (latest as of 2026-08-28)
+      if (svelteVer && (major < 5 || (major === 5 && minor < 57))) {
         allDiagnostics.push({
           ruleId: "svelte-5-doctor/supply-chain-outdated-svelte",
           severity: "warn",
           category: "Security",
-          message: `svelte ${svelteVer} outdated — latest 5.56.10 (fix #18668 SSR double-call, #18625 each batch). Update.`,
+          message: `svelte ${svelteVer} outdated — latest 5.57.0 (#18692 derived_invalid_export, #18689 a11y focusin/focusout, #18480 undeclared shorthand handlers). Update.`,
           filePath: "package.json",
           line: 1,
           column: 1,
@@ -1004,6 +1038,52 @@ export const runInspect = async (input: InspectInput): Promise<JsonReport> => {
             column: 1,
             tags: ["supply-chain"],
           });
+        }
+      }
+
+      // ── Svelte 5.57.0 version-gated features ──
+      // Check if svelte < 5.57.0 and code uses new APIs that are silently unavailable
+      const needs557 = major === 5 && minor < 57;
+      if (needs557) {
+        for (const rel of files) {
+          if (!rel.endsWith(".svelte") && !rel.endsWith(".svelte.js") && !rel.endsWith(".svelte.ts")) continue;
+          let src = "";
+          try { src = readFileSync(join(directory, rel), "utf-8"); } catch { continue; }
+          // <select defaultValue> — silently ignored before 5.57.0
+          if (/defaultValue\s*=/.test(src) && /<select\b/.test(src)) {
+            const idx = src.search(/<select\b[^>]*\bdefaultValue\b/);
+            allDiagnostics.push({ ruleId: "svelte-5-doctor/version-select-defaultvalue", severity: "warn", category: "Correctness",
+              message: `<select defaultValue> requires Svelte 5.57.0+ — currently ignored in ${svelteVer}. Use <option selected> instead, or update Svelte.`,
+              filePath: rel, line: idx !== -1 ? src.slice(0, idx).split("\n").length : 1, column: 1, tags: ["migration","version-gate"] });
+          }
+          // createContext().has() — undefined before 5.57.0
+          if (/\.has\s*\(/.test(src) && /createContext/.test(src)) {
+            const idx = src.indexOf(".has(");
+            allDiagnostics.push({ ruleId: "svelte-5-doctor/version-createcontext-has", severity: "warn", category: "Correctness",
+              message: `createContext().has() requires Svelte 5.57.0+ — returns undefined in ${svelteVer}. Check context existence differently, or update Svelte.`,
+              filePath: rel, line: idx !== -1 ? src.slice(0, idx).split("\n").length : 1, column: 1, tags: ["migration","version-gate"] });
+          }
+          // SvelteMap.getOrInsert/getOrInsertComputed — not available before 5.57.0
+          if (/getOrInsert/.test(src)) {
+            const idx = src.indexOf("getOrInsert");
+            allDiagnostics.push({ ruleId: "svelte-5-doctor/version-sveltemap-getorinsert", severity: "warn", category: "Correctness",
+              message: `SvelteMap.getOrInsert/getOrInsertComputed requires Svelte 5.57.0+ — not available in ${svelteVer}. Use map.has()/map.get() with fallback, or update Svelte.`,
+              filePath: rel, line: idx !== -1 ? src.slice(0, idx).split("\n").length : 1, column: 1, tags: ["migration","version-gate"] });
+          }
+          // Reading async values in closures inside {#snippet}/{@const} — may crash before 5.57.0
+          if (/(?:\{#snippet|\{@const)[^}]*await/.test(src) && /\(\s*(?:\([^)]*\)|[^)]+)\s*\)\s*=>/.test(src)) {
+            const idx = src.search(/\{#snippet[^}]*await|\{@const[^}]*await/);
+            allDiagnostics.push({ ruleId: "svelte-5-doctor/version-async-values-in-closures", severity: "warn", category: "Correctness",
+              message: `Reading async values in closures inside {#snippet}/{@const} may crash in Svelte <5.57.0 (${svelteVer}). Update Svelte to avoid runtime errors.`,
+              filePath: rel, line: idx !== -1 ? src.slice(0, idx).split("\n").length : 1, column: 1, tags: ["migration","version-gate"] });
+          }
+          // bind:this component stored in $state — inconsistent dev/prod before 5.57.0
+          if (/bind:this\s*=/.test(src) && /\$state/.test(src)) {
+            const idx = src.indexOf("bind:this");
+            allDiagnostics.push({ ruleId: "svelte-5-doctor/version-bindthis-component-in-state", severity: "warn", category: "Correctness",
+              message: `bind:this component stored in $state may have inconsistent dev/prod behavior in Svelte <5.57.0 (${svelteVer}). Avoid storing component refs in $state, or update Svelte.`,
+              filePath: rel, line: idx !== -1 ? src.slice(0, idx).split("\n").length : 1, column: 1, tags: ["migration","version-gate"] });
+          }
         }
       }
     }

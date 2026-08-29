@@ -64,6 +64,8 @@ export const SVELTE_DOCTOR_RULES: RuleMeta[] = [
   // ── Accessibility (bridges svelte compiler a11y warnings) ──
   { id: "svelte-5-doctor/a11y-missing-attribute", category: "Accessibility", severity: "warn", description: "a11y: missing required attribute (img alt, a href)", tags: ["a11y"], framework: "svelte5" },
   { id: "svelte-5-doctor/a11y-click-events-have-key-events", category: "Accessibility", severity: "warn", description: "click handler without key handler", tags: ["a11y"], framework: "global" },
+  { id: "svelte-5-doctor/a11y-mouse-events-have-key-events", category: "Accessibility", severity: "warn", description: "Mouse event (onmouseover/onmouseout) without keyboard equivalent — use onfocusin/onfocusout (Svelte 5.57.0+)", tags: ["a11y"], framework: "global" },
+  { id: "svelte-5-doctor/special-element-undeclared-handler", category: "Correctness", severity: "warn", description: "Undeclared shorthand event handler on <svelte:window>/<svelte:document>/<svelte:body> — Svelte 5.57.0+ warns (PR #18480)", tags: ["correctness","svelte5.57"], framework: "svelte5" },
   { id: "svelte-5-doctor/a11y-no-static-element-interactions", category: "Accessibility", severity: "warn", description: "Interactive handler on static element without role", tags: ["a11y"], framework: "global" },
 
   // ── Perfection 2026-08-27 — 21 high-priority + 5 Kit (Svelte 5.56.10) ──
@@ -90,7 +92,14 @@ export const SVELTE_DOCTOR_RULES: RuleMeta[] = [
   { id: "svelte-5-doctor/kit-app-state-eager-init", category: "Performance", severity: "warn", description: "$app/state read at module top-level — eager leak in 2.70.3, move inside effect", tags: ["performance","sveltekit"], framework: "sveltekit" },
   { id: "svelte-5-doctor/kit-prefer-context-over-module-state", category: "Maintainability", severity: "warn", description: "Module-level $state in $lib vs createContext — SSR leak, prefer createContext", tags: ["maintainability","sveltekit"], framework: "sveltekit" },
   { id: "svelte-5-doctor/deslop-unused-file", category: "Maintainability", severity: "warn", description: "Svelte file never imported — dead code (port of deslop-js)", tags: ["maintainability","deslop"], framework: "svelte5" },
-  { id: "svelte-5-doctor/supply-chain-outdated-svelte", category: "Security", severity: "warn", description: "Outdated svelte <5.56.10 — supply-chain risk, update", tags: ["security","supply-chain"], framework: "svelte5" },
+  { id: "svelte-5-doctor/supply-chain-outdated-svelte", category: "Security", severity: "warn", description: "Outdated svelte <5.57.0 — supply-chain risk, update", tags: ["security","supply-chain"], framework: "svelte5" },
+
+  // ── Svelte 5.57.0 version-gated features — warn when code uses APIs unavailable in older Svelte ──
+  { id: "svelte-5-doctor/version-select-defaultvalue", category: "Correctness", severity: "warn", description: "<select defaultValue> requires Svelte 5.57.0+ — silently ignored in older versions (PR #18591)", tags: ["correctness","migration"], framework: "svelte5" },
+  { id: "svelte-5-doctor/version-createcontext-has", category: "Correctness", severity: "warn", description: "createContext().has() requires Svelte 5.57.0+ — undefined in older versions (PR #18472)", tags: ["correctness","migration"], framework: "svelte5" },
+  { id: "svelte-5-doctor/version-sveltemap-getorinsert", category: "Correctness", severity: "warn", description: "SvelteMap.getOrInsert/getOrInsertComputed requires Svelte 5.57.0+ (PR #18728)", tags: ["correctness","migration"], framework: "svelte5" },
+  { id: "svelte-5-doctor/version-async-values-in-closures", category: "Correctness", severity: "warn", description: "Reading async values in closures inside {#snippet}/{@const} requires Svelte 5.57.0+ — may crash in older versions (PR #18533)", tags: ["correctness","migration"], framework: "svelte5" },
+  { id: "svelte-5-doctor/version-bindthis-component-in-state", category: "Correctness", severity: "warn", description: "bind:this component stored in $state may have inconsistent dev/prod behavior before Svelte 5.57.0 (PR #18646)", tags: ["correctness","migration"], framework: "svelte5" },
 
   // ── 0.5.0 Brutally Needed (12) — SvelteKit 2/3 aware, no bloat ──
   { id: "svelte-5-doctor/rune-outside-svelte", category: "Correctness", severity: "error", description: "Rune ($state/$derived/$effect/$props/$bindable) outside .svelte/.svelte.js/.svelte.ts — silent no-op, rename file", tags: ["correctness","rune"], framework: "svelte5" },

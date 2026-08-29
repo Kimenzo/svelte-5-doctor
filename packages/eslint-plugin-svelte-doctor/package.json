@@ -1,6 +1,6 @@
 {
   "name": "eslint-plugin-svelte-5-doctor",
-  "version": "0.5.6",
+  "version": "0.6.0",
   "description": "ESLint plugin for Svelte 5 Doctor — flat config wrapper (port of eslint-plugin-react-doctor). Renamed for svelte-5-doctor publish.",
   "type": "module",
   "main": "./dist/index.js",

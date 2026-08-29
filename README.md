@@ -88,14 +88,14 @@ export default {
 };
 ```
 
-## What it checks — 52 rules across 5 categories
+## What it checks — 54 rules across 5 categories
 
 | Category | Example Rules | Ported From |
 |----------|---------------|-------------|
 | **Security** | `no-at-html-xss` ({@html} XSS → React's dangerouslySetInnerHTML), `dom-clobbering-risk` (CVE-2026-42573), `no-eval`, `iframe-missing-sandbox` | `react-doctor/security` |
-| **Correctness** | `legacy-export-let`, `legacy-dollars-colon` ($: → $derived), `legacy-event-directive` (on:click → onclick), `rune-invalid-placement`, `state-invalid-export`, `effect-needs-cleanup`, `no-effect-derived` (8 ported from `you-might-not-need-an-effect`) | `react-doctor/state-and-effects` + `compiler-errors` |
+| **Correctness** | `legacy-export-let`, `legacy-dollars-colon` ($: → $derived), `legacy-event-directive` (on:click → onclick), `rune-invalid-placement`, `state-invalid-export`, `effect-needs-cleanup`, `no-effect-derived` (8 ported from `you-might-not-need-an-effect`), `special-element-undeclared-handler` (Svelte 5.57.0+) | `react-doctor/state-and-effects` + `compiler-errors` |
 | **Performance** | `no-index-as-key` ({#each} key), `perf-avoid-deep-proxy` ($state.raw), `no-layout-animation`, `js-combine-iterations`, `no-barrel-import` | `react-doctor/performance` + `js-*` |
-| **Accessibility** | `a11y-missing-attribute`, `a11y-click-events-have-key-events` (bridges `svelte/compiler` a11y warnings) | `react-doctor/a11y` + 30+ `svelte:a11y_*` warnings |
+| **Accessibility** | `a11y-missing-attribute`, `a11y-click-events-have-key-events`, `a11y-mouse-events-have-key-events` (Svelte 5.57.0+: accepts onfocusin/onfocusout) (bridges `svelte/compiler` a11y warnings) | `react-doctor/a11y` + 30+ `svelte:a11y_*` warnings |
 | **Maintainability** | `no-giant-component` (>400 lines), `css-unused-selector`, dead-code via `deslop` | `react-doctor/maintainability` |
 
 Full list:
@@ -115,8 +115,9 @@ Svelte Doctor understands Svelte 5 runes thoroughly (verified via exhaustive web
 - **Events:** `onclick` vs `on:click`, modifier de-migration, delegated event perf.
 - **Files:** `.svelte` vs `.svelte.js/.svelte.ts` shared state modules — SSR global-leak detection.
 - **Lifecycle:** `beforeUpdate/afterUpdate` → `$effect.pre/$effect` + `tick()` guidance.
+- **Svelte 5.57.0:** `derived_invalid_export` for `export let x = $derived(...)`, `onfocusin`/`onfocusout` accepted in a11y, undeclared shorthand handlers on `<svelte:window>`/`<svelte:document>`/`<svelte:body>`.
 
-See [`docs/svelte-5-porting-map.md`](./docs/svelte-5-porting-map.md) for the full React → Svelte rule translation table (287 → 52 first wave).
+See [`docs/svelte-5-porting-map.md`](./docs/svelte-5-porting-map.md) for the full React → Svelte rule translation table (287 → 54 rules).
 
 ## Scoring
 

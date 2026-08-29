@@ -1,6 +1,6 @@
 {
   "name": "svelte-plugin-svelte-5-doctor",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "description": "Svelte plugin for Svelte 5 Doctor — 48 rules for Svelte 5 (port of oxlint-plugin-react-doctor's 287 rules). Renamed for svelte-5-doctor publish.",
   "type": "module",
   "main": "./dist/index.js",

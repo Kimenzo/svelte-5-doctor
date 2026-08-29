@@ -259,14 +259,20 @@ const runRulesOnFile = (filePath: string, source: string, directory?: string): D
       report("svelte-5-doctor/derived-invalid-export", "Exporting $derived from module is invalid.", m.index ?? 0);
     }
   }
-  // rune missing parens: $state without () or $derived without () — strip comments to avoid false positives in // $state docs
-  for (const m of sourceNoComments.matchAll(/\$(state|derived|effect|props|bindable|inspect)(?!\s*\()/g)) {
+  // rune missing parens: $state without () — handle generics $state<Type>(val) as valid (Svelte 5.56.10) — check for <...>( pattern
+  for (const m of sourceNoComments.matchAll(/\$(state|derived|effect|props|bindable|inspect)(?!\s*[\(.<])/g)) {
     const full = m[0];
-    // allow $effect.pending, $effect.tracking, $state.snapshot etc
     if (/\$(state|effect)\.(snapshot|eager|raw|pending|tracking|root)/.test(full)) continue;
     if (full === "$props" || full === "$host") continue;
-    const after = sourceNoComments.slice((m.index ?? 0) + full.length, (m.index ?? 0) + full.length + 5);
-    if (!after.trim().startsWith("(") && !after.trim().startsWith(".")) {
+    const after = sourceNoComments.slice((m.index ?? 0) + full.length, (m.index ?? 0) + full.length + 30);
+    const trimmed = after.trim();
+    // $state<Type>(value) is valid: after is <...>( — check for <, then > with ( after
+    if (trimmed.startsWith("<")) {
+      const gtIdx = trimmed.indexOf(">");
+      const afterGt = gtIdx !== -1 ? trimmed.slice(gtIdx + 1).trim() : "";
+      if (afterGt.startsWith("(")) continue; // generic with parens is valid
+    }
+    if (!trimmed.startsWith("(") && !trimmed.startsWith(".") && !trimmed.startsWith("<")) {
       report("svelte-5-doctor/rune-requires-parens", `Rune ${full} used without parentheses — add ()`, m.index ?? 0, `${full}()`);
     }
   }
@@ -669,8 +675,21 @@ const runRulesOnFile = (filePath: string, source: string, directory?: string): D
       }
     }
   }
-  for (const m of source.matchAll(/transition:\w+[^}]*width|animate:[^;]*width|style:[^;]*width/g))
-    if (/width|height|top|left/.test(m[0])) report("svelte-5-doctor/no-layout-animation", "Animating layout properties causes thrash — use transform/opacity.", m.index ?? 0);
+  // no-layout-animation: only flag layout props (width/height/top/left etc.) when actually animated, not compositing (opacity/transform)
+  for (const m of source.matchAll(/transition:\w+[^}]*width|animate:[^;]*width|style:[^;]*width/g)) {
+    // Skip @keyframes that only use opacity/transform (compositing) — check if block contains only opacity/transform
+    const block = m[0];
+    const isCompositingOnly = /opacity|transform/.test(block) && !/width|height|top|left|right|bottom|margin|padding/.test(block.replace(/opacity|transform/g, ""));
+    if (!isCompositingOnly && /width|height|top|left/.test(block)) report("svelte-5-doctor/no-layout-animation", "Animating layout properties causes thrash — use transform/opacity.", m.index ?? 0);
+  }
+  // Also handle @keyframes with layout props: only flag if keyframes block contains width/height/top/left etc. and not just opacity/transform
+  for (const m of source.matchAll(/@keyframes\s+\w+\s*\{[^}]*\b(width|height|top|left|right|bottom|margin|padding)\b[^}]*\}/gs)) {
+    const block = m[0];
+    if (!/opacity|transform/.test(block) || /width|height/.test(block)) {
+      // Only flag if actually animating layout, not compositing
+      report("svelte-5-doctor/no-layout-animation", "Animating layout properties in @keyframes causes thrash — use transform/opacity.", m.index ?? 0);
+    }
+  }
   for (const m of source.matchAll(/transition:\s*all\b/g)) report("svelte-5-doctor/no-transition-all", "transition:all is expensive — specify property.", m.index ?? 0);
   for (const m of source.matchAll(/filter:\s*blur\(\s*(\d+)px\)/g)) {
     const r = Number.parseInt(m[1] ?? "0", 10);
@@ -710,12 +729,25 @@ const runRulesOnFile = (filePath: string, source: string, directory?: string): D
       report("svelte-5-doctor/kit-requested-limit", "requested() without limit — breaking in 2.58, add {limit} and handle {arg, query}", m.index ?? 0);
     }
   }
-  if (/from\s+['"]\$app\/state['"]/.test(source) && /import\s*\{[^}]*page[^}]*\}\s*from\s*['"]\$app\/state['"]/.test(source)) {
-    // check eager read at top-level
-    const importIdx = source.indexOf("$app/state");
-    const afterImport = source.slice(importIdx, importIdx + 500);
-    if (/page\.url|page\.params|page\.data/.test(afterImport) && !/\$effect|onMount/.test(source.slice(importIdx, importIdx + 1000))) {
-      report("svelte-5-doctor/kit-app-state-eager-init", "$app/state read at module top-level — move inside $effect/onMount to avoid eager leak (2.70.3)", importIdx);
+  // $app/state is designed for top-level import — only flag top-level READS outside reactive context, not the import itself
+  if (/from\s+['"]\$app\/state['"]/.test(source)) {
+    // Find all page.url/params/data reads
+    for (const m of source.matchAll(/page\.(url|params|data)\b/g)) {
+      const before = source.slice(0, m.index ?? 0);
+      const lineStart = before.lastIndexOf("\n") + 1;
+      const line = source.slice(lineStart, (m.index ?? 0) + 20).trim();
+      // Skip if read is inside $derived, $effect, function, or onMount
+      const context = before.slice(-800);
+      const inReactive = /\$derived|\$effect|onMount|function\s+\w*\s*\(/.test(context.slice(-300));
+      const inImport = line.includes("import") && line.includes("$app/state");
+      if (!inReactive && !inImport && !line.startsWith("import")) {
+        // Check if at top-level (not inside function)
+        const indent = (source.slice(lineStart, m.index ?? 0).match(/^\s*/) ?? [""])[0].length;
+        if (indent === 0) {
+          report("svelte-5-doctor/kit-app-state-eager-init", "$app/state read at module top-level — move inside $derived/$effect/onMount to avoid eager leak (2.70.3)", m.index ?? 0);
+          break;
+        }
+      }
     }
   }
 

@@ -409,12 +409,18 @@ const runRulesOnFile = (filePath: string, source: string, directory?: string): D
       report("svelte-5-doctor/rune-outside-svelte", `Rune ${runeMatch[0].trim()} outside .svelte/.svelte.js/.svelte.ts — rename file to .svelte.js/.svelte.ts or move to .svelte`, idx);
     }
   }
-  // state-proxy-equality-mismatch: proxy === raw always false
+  // state-proxy-equality-mismatch: proxy === raw always false — only for object/array $state, not primitives (string/number/boolean/null)
   for (const sv of stateVars) {
+    // Check initialization: only flag if $state arg is object/array ( {, [, new Set(, new Map(, etc.), not primitive 'all', 0, true, null
+    const initMatch = source.match(new RegExp(`\\b(?:let|const)\\s+${sv}\\s*=\\s*\\$state(?:\\.raw)?\\s*\\(\\s*([^)]*)\\s*\\)`));
+    const initArg = initMatch?.[1]?.trim() ?? "";
+    const isPrimitiveInit = /^['"`].*['"`]$/.test(initArg) || /^(true|false|null|undefined|\d+(\.\d+)?)$/.test(initArg) || initArg === "" || initArg === "''" || initArg === '""';
+    const isObjectInit = /^[\{\[]/.test(initArg) || /new\s+(Set|Map|Date|Object|Array)/.test(initArg) || initArg.includes("{") || initArg.includes("[");
+    // Only flag if initialized with object/array (proxied), not primitive
+    if (isPrimitiveInit && !isObjectInit) continue;
     const reEq = new RegExp(`\\b${sv}\\s*===?\\s*\\w+|\\w+\\s*===?\\s*\\b${sv}\\b`, "g");
     for (const m of source.matchAll(reEq)) {
       const snippet = m[0];
-      // Skip if both sides are state vars or both are snapshots
       const isSnapshot = snippet.includes("$state.snapshot");
       if (!isSnapshot) {
         report("svelte-5-doctor/state-proxy-equality-mismatch", `Comparing proxy '${sv}' with raw object via === always false — use $state.snapshot(${sv})`, m.index ?? 0);
@@ -752,14 +758,25 @@ const runRulesOnFile = (filePath: string, source: string, directory?: string): D
   }
 
   // ── Maintainability ──
-  if (lines.length > GIANT_COMPONENT_THRESHOLD_LINES)
+  if (filePath.endsWith(".svelte") && lines.length > GIANT_COMPONENT_THRESHOLD_LINES)
     report("svelte-5-doctor/no-giant-component", `Component is ${lines.length} lines (threshold ${GIANT_COMPONENT_THRESHOLD_LINES}) — split via snippets/composition.`, 0);
   for (const m of source.matchAll(/\{#if[\s\S]*?\{#snippet|\{#each[\s\S]*?\{#snippet/g))
     report("svelte-5-doctor/no-nested-snippet", "Snippet defined inside markup recreates each render — hoist to top-level.", m.index ?? 0);
 
   // ── a11y ──
   for (const m of source.matchAll(/<img\b(?![^>]*\balt=)[^>]*>/gi)) report("svelte-5-doctor/a11y-missing-attribute", "<img> missing alt attribute.", m.index ?? 0);
-  for (const m of source.matchAll(/<a\b(?![^>]*\bhref=)[^>]*>/gi)) report("svelte-5-doctor/a11y-missing-attribute", "<a> missing href.", m.index ?? 0);
+  for (const m of source.matchAll(/<a\b(?![^>]*\bhref=)(?![^>]*\{href\})[^>]*>/gi)) {
+    // Skip if inside {#if href} or {#if condition} where href is guaranteed (Svelte conditional rendering)
+    const before = source.slice(Math.max(0, (m.index ?? 0) - 800), m.index ?? 0);
+    const lastIf = before.lastIndexOf("{#if");
+    const lastEndIf = before.lastIndexOf("{/if}");
+    const insideIf = lastIf > lastEndIf;
+    if (insideIf) {
+      const ifCondition = before.slice(lastIf, lastIf + 200);
+      if (/\bhref\b/.test(ifCondition)) continue;
+    }
+    report("svelte-5-doctor/a11y-missing-attribute", "<a> missing href.", m.index ?? 0);
+  }
   for (const m of source.matchAll(/onclick\s*=\s*\{[^}]+\}(?![^<]*onkeydown)/gi)) {
     const tagMatch = source.slice(Math.max(0, (m.index ?? 0) - 100), m.index ?? 0).match(/<(\w+)\b[^>]*$/);
     const tag = tagMatch?.[1] ?? "";

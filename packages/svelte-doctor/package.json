@@ -1,6 +1,6 @@
 {
   "name": "svelte-5-doctor",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Svelte 5 Doctor — 0-100 health check for Svelte 5. Ported from React Doctor (millionco/react-doctor). Renamed from svelte-doctor (taken on npm by pimatis/svelte-doctor).",
   "type": "module",
   "bin": {

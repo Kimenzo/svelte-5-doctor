@@ -218,7 +218,9 @@ export const applyFixes = (filePath: string, source: string, diagnostics: Diagno
           });
           if (fixed !== before) applied++; else skipped++;
         } else if (d.message.includes("<a>")) {
-          fixed = fixed.replace(/<a\b(?![^>]*\bhref=)([^>]*?)>/gi, (m, attrs) => {
+          // Fix: check for existing href in any form: href=, {href}, href as word, or spread {...rest} which may contain href
+          // Use \bhref\b to catch {href} shorthand and href=, and also check for spread {... to avoid duplicate when href comes via spread
+          fixed = fixed.replace(/<a\b(?![^>]*\bhref\b)(?![^>]*\{\s*\.\.\.)([^>]*?)>/gi, (m, attrs) => {
             const hasSlash = /\s*\/\s*$/.test(attrs);
             const cleanAttrs = attrs.replace(/\s*\/\s*$/, "");
             return `<a${cleanAttrs} href="#"${hasSlash ? " /" : ""}>`;

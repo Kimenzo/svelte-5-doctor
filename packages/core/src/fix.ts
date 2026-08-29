@@ -31,7 +31,6 @@ const FIXABLE = new Set<string>([
   "svelte-5-doctor/each-item-mutation",
   "svelte-5-doctor/compile-error",
   "svelte-5-doctor/no-at-html-xss",
-  "svelte-5-doctor/no-index-as-key",
   "svelte-5-doctor/snapshot-required",
 ]);
 
@@ -184,8 +183,8 @@ export const applyFixes = (filePath: string, source: string, diagnostics: Diagno
           if (fixed !== before) applied++; else skipped++;
         }
       } else if (d.ruleId.includes("rune-requires-parens")) {
-        // $state -> $state() etc.
-        fixed = fixed.replace(/\$(state|derived|effect|props|bindable|inspect)(?!\s*[\(.])/g, (m, name) => `$${name}()`);
+        // $state -> $state() etc., but NOT for $state<Type> generic (Svelte 5.56.10) — check for < after
+        fixed = fixed.replace(/\$(state|derived|effect|props|bindable|inspect)(?!\s*[\(.<])/g, (m, name) => `$${name}()`);
         if (fixed !== before) applied++; else skipped++;
       } else if (d.ruleId.includes("css-unused-selector")) {
         // Remove unused selector block: find line with selector and remove next block

@@ -1,6 +1,6 @@
 {
   "name": "svelte-5-doctor-core",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Svelte 5 Doctor core — diagnostic engine for Svelte 5. Ported from @react-doctor/core. Renamed from @svelte-doctor/core for npm publish (svelte-doctor taken).",
   "type": "module",
   "main": "./dist/index.js",
